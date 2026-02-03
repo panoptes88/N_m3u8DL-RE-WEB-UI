@@ -65,7 +65,7 @@ N_m3u8DL-RE_WEB_UI/
 │   │   ├── stores/       # Pinia 状态管理
 │   │   └── api/          # API 调用
 │   └── package.json
-├── bin/                  # 二进制工具目录
+├── bin/                  # 二进制工具目录（已打包到镜像）
 ├── Dockerfile
 ├── docker-compose.yml
 └── README.md

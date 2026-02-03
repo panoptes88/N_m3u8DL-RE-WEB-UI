@@ -1,3 +1,4 @@
+# 构建前端
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -16,9 +17,6 @@ RUN npm run build
 FROM golang:1.21 AS backend
 
 WORKDIR /app
-
-# 预先创建 bin 目录
-RUN mkdir -p /app/bin
 
 # 复制依赖文件
 COPY cmd/ ./cmd
@@ -49,8 +47,11 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 WORKDIR /app
 
-# 创建目录
+# 创建必要目录
 RUN mkdir -p /app/downloads /app/bin /app/Logs
+
+# 复制二进制文件
+COPY bin/ /app/bin/
 
 # 复制后端二进制
 COPY --from=backend /app/server ./
@@ -68,20 +69,4 @@ ENV DB_PATH=/app/data.db
 # 预创建数据库文件
 RUN touch /app/data.db && chmod 777 /app/data.db
 
-# 创建启动脚本，提示用户挂载 bin 目录
-RUN echo '#!/bin/bash\n\
-echo "=========================================="\n\
-echo "N_m3u8DL-RE WebUI"\n\
-echo "=========================================="\n\
-if [ ! -f "$BIN_DIR/N_m3u8DL-RE" ]; then\n\
-    echo "错误: 请确保 bin 目录已挂载，包含以下文件:"\n\
-    echo "  - N_m3u8DL-RE (下载器)"\n\
-    echo "  - ffmpeg (视频处理)"\n\
-    echo "  - mp4decrypt (解密工具)"\n\
-    echo ""\n\
-    echo "可以使用 docker-compose 的 volume 挂载 bin 目录"\n\
-    exit 1\n\
-fi\n\
-exec ./server\n' > /entrypoint.sh && chmod +x /entrypoint.sh
-
-CMD ["/entrypoint.sh"]
+CMD ["./server"]

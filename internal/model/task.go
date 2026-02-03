@@ -12,6 +12,8 @@ type Task struct {
 	Status            string         `gorm:"size:32;default:'pending'" json:"status"`
 	Progress          int            `gorm:"default:0" json:"progress"`
 	Speed             string         `gorm:"size:32" json:"speed"`
+	DownloadedSize    string         `gorm:"size:32" json:"downloaded_size"`     // 已下载大小
+	TotalSize         string         `gorm:"size:32" json:"total_size"`          // 总大小
 	OutputName        string         `gorm:"size:512" json:"output_name"`
 	ThreadCount       int            `gorm:"default:32" json:"thread_count"`
 	RetryCount        int            `gorm:"default:15" json:"retry_count"`

@@ -96,7 +96,13 @@
               :percent="record.progress"
               :status="record.status === 'failed' ? 'exception' : 'active'"
               size="small"
-            />
+            >
+              <template #format>
+                <span v-if="record.downloaded_size && record.total_size" class="size-text">
+                  {{ record.downloaded_size }} / {{ record.total_size }}
+                </span>
+              </template>
+            </a-progress>
           </template>
           <template v-if="column.key === 'action'">
             <a-space>
@@ -261,5 +267,11 @@ onUnmounted(() => {
 
 .recent-tasks {
   flex: 1;
+}
+
+.size-text {
+  font-size: 12px;
+  color: #999;
+  margin-left: 4px;
 }
 </style>

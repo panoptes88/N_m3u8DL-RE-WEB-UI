@@ -368,6 +368,11 @@ func buildCommandArgs(task *model.Task, cfg *config.Config) []string {
 	return args
 }
 
+// 任务日志检查时间阈值（秒）
+// N_m3u8DL-RE 可能主进程退出但子进程继续工作
+// 通过检查日志文件修改时间来判断任务是否还在进行
+const logFileCheckThreshold = 30 // 30秒内有更新视为任务还在进行
+
 func updateTaskStatus(taskID uint) {
 	task, err := GetTaskByID(taskID)
 	if err != nil {
@@ -375,6 +380,17 @@ func updateTaskStatus(taskID uint) {
 	}
 
 	logFile := task.LogFile
+
+	// 获取日志文件信息
+	logFileInfo, err := os.Stat(logFile)
+	if err != nil {
+		return
+	}
+
+	// 检查日志文件是否在最近30秒内更新
+	logFileMtime := logFileInfo.ModTime()
+	logFileRecentlyUpdated := time.Since(logFileMtime) < logFileCheckThreshold*time.Second
+
 	progressInfo := parseProgress(logFile)
 
 	if progressInfo != nil {
@@ -396,16 +412,35 @@ func updateTaskStatus(taskID uint) {
 		}
 	}
 
-	// 如果进程还在运行，只更新进度，不更新完成状态
+	// 如果进程还在运行
 	if processStillRunning {
 		task.PID = 0
 		model.GetDB().Save(task)
 		return
 	}
 
-	// 进程已不存在
+	// 进程已不存在，但如果日志最近有更新，说明子进程还在工作
 	if task.Status == model.TaskStatusDownloading {
-		// 原来是下载中状态，但进程已死，标记为中断
+		if logFileRecentlyUpdated {
+			// 日志最近有更新，检查是否已完成
+			if logContent, err := ioutil.ReadFile(logFile); err == nil {
+				content := string(logContent)
+				if strings.Contains(content, "合并完成") || strings.Contains(content, "downloaded successfully") || strings.Contains(content, " Done") {
+					task.Status = model.TaskStatusCompleted
+					now := time.Now()
+					task.FinishedAt = &now
+					task.Progress = 100
+					task.PID = 0
+					model.GetDB().Save(task)
+					return
+				}
+			}
+			// 日志还在更新，任务可能正在进行（主进程退出但子进程在工作）
+			task.PID = 0
+			model.GetDB().Save(task)
+			return
+		}
+		// 进程已死且日志也没有更新，标记为中断
 		task.Status = model.TaskStatusInterrupted
 		task.ErrorMsg = "下载进程已中断，请重试或删除任务"
 		now := time.Now()

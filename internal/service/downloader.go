@@ -368,10 +368,14 @@ func updateTaskStatus(taskID uint) {
 	}
 
 	logFile := task.LogFile
-	progress, speed := parseProgress(logFile)
+	progressInfo := parseProgress(logFile)
 
-	task.Progress = progress
-	task.Speed = speed
+	if progressInfo != nil {
+		task.Progress = progressInfo.Progress
+		task.Speed = progressInfo.Speed
+		task.DownloadedSize = progressInfo.DownloadedSize
+		task.TotalSize = progressInfo.TotalSize
+	}
 
 	// 真正检测进程是否还在运行
 	processStillRunning := false
@@ -431,36 +435,51 @@ func updateTaskFailed(taskID uint, errorMsg string) {
 	}
 }
 
-func parseProgress(logFile string) (int, string) {
+// ProgressInfo 下载进度信息
+type ProgressInfo struct {
+	Progress      int
+	Speed         string
+	DownloadedSize string
+	TotalSize     string
+}
+
+func parseProgress(logFile string) *ProgressInfo {
 	content, err := ioutil.ReadFile(logFile)
 	if err != nil {
-		return 0, ""
+		return nil
 	}
 
 	text := string(content)
+	result := &ProgressInfo{}
 
+	// 解析进度百分比
 	progressRe := regexp.MustCompile(`(\d+\.?\d*)%`)
-	if matches := progressRe.FindStringSubmatch(text); len(matches) > 2 {
+	if matches := progressRe.FindStringSubmatch(text); len(matches) > 1 {
 		if p, err := strconv.Atoi(matches[1]); err == nil {
-			progress := p
-			if progress > 100 {
-				progress = 100
+			result.Progress = p
+			if result.Progress > 100 {
+				result.Progress = 100
 			}
-			if progress < 0 {
-				progress = 0
+			if result.Progress < 0 {
+				result.Progress = 0
 			}
-
-			speedRe := regexp.MustCompile(`(\d+\.?\d*\s*[KMG]?B/s)`)
-			speed := ""
-			if speedMatches := speedRe.FindStringSubmatch(text); len(speedMatches) > 1 {
-				speed = speedMatches[1]
-			}
-
-			return progress, speed
 		}
 	}
 
-	return 0, ""
+	// 解析速度
+	speedRe := regexp.MustCompile(`(\d+\.?\d*\s*[KMG]?B/s)`)
+	if speedMatches := speedRe.FindStringSubmatch(text); len(speedMatches) > 1 {
+		result.Speed = speedMatches[1]
+	}
+
+	// 解析下载大小 (格式: 16.80MB/1.24GB)
+	sizeRe := regexp.MustCompile(`(\d+\.?\d*\s*[KMG]?B)/(\d+\.?\d*\s*[KMG]?B)`)
+	if sizeMatches := sizeRe.FindStringSubmatch(text); len(sizeMatches) > 2 {
+		result.DownloadedSize = sizeMatches[1]
+		result.TotalSize = sizeMatches[2]
+	}
+
+	return result
 }
 
 func openLogFile(path string) *os.File {

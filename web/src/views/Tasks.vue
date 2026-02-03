@@ -165,7 +165,11 @@
               :status="record.status === 'failed' ? 'exception' : 'active'"
             >
               <template #format>
-                <span>{{ record.speed || '-' }}</span>
+                <span v-if="record.downloaded_size && record.total_size">
+                  {{ record.downloaded_size }} / {{ record.total_size }}
+                </span>
+                <span v-else-if="record.speed">{{ record.speed }}</span>
+                <span v-else>-</span>
               </template>
             </a-progress>
           </template>

@@ -139,6 +139,8 @@ function playVideo(record) {
 
 function closeVideo() {
   if (videoPlayer.value) {
+    // 先移除事件监听，避免触发 error
+    videoPlayer.value.onerror = null
     videoPlayer.value.pause()
     videoPlayer.value.src = ''
   }

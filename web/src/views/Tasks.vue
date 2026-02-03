@@ -253,12 +253,12 @@ const formRules = {
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-  { title: 'URL', dataIndex: 'url', key: 'url', ellipsis: true },
-  { title: '输出', dataIndex: 'output_name', key: 'outputName', ellipsis: true },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 200 },
+  { title: 'URL', dataIndex: 'url', key: 'url', ellipsis: true, width: 250 },
+  { title: '输出', dataIndex: 'output_name', key: 'outputName', ellipsis: true, width: 150 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 280 },
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 160 },
-  { title: '操作', key: 'action', width: 150 }
+  { title: '操作', key: 'action', width: 120 }
 ]
 
 function getStatusColor(status) {

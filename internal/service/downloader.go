@@ -443,40 +443,83 @@ type ProgressInfo struct {
 	TotalSize     string
 }
 
+// cleanANSI 清理ANSI转义码和特殊Unicode字符
+func cleanANSI(s string) string {
+	// 使用正则清理 ANSI 转义码
+	ansiRe := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	s = ansiRe.ReplaceAllString(s, "")
+
+	// 清理进度条Unicode字符（━ U+2501）
+	barRe := regexp.MustCompile(`[━]{10,}`)
+	s = barRe.ReplaceAllString(s, " ")
+
+	return s
+}
+
 func parseProgress(logFile string) *ProgressInfo {
 	content, err := ioutil.ReadFile(logFile)
 	if err != nil {
 		return nil
 	}
 
-	text := string(content)
+	lines := strings.Split(string(content), "\n")
 	result := &ProgressInfo{}
 
-	// 解析进度百分比
-	progressRe := regexp.MustCompile(`(\d+\.?\d*)%`)
-	if matches := progressRe.FindStringSubmatch(text); len(matches) > 1 {
-		if p, err := strconv.Atoi(matches[1]); err == nil {
-			result.Progress = p
-			if result.Progress > 100 {
-				result.Progress = 100
-			}
-			if result.Progress < 0 {
-				result.Progress = 0
+	// 只从最后几行查找进度信息
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := cleanANSI(lines[i])
+		line = strings.TrimSpace(line)
+
+		// 跳过空行
+		if line == "" {
+			continue
+		}
+
+		// 解析完整进度行
+		// 格式: Vid Kbps 1268/1735 73.08% 913.30MB/1.22GB 3.10MBps 00:01:09
+
+		// 解析进度百分比
+		progressRe := regexp.MustCompile(`(\d+\.?\d*)%`)
+		if matches := progressRe.FindStringSubmatch(line); len(matches) > 1 {
+			// 使用 ParseFloat 因为进度可能是浮点数
+			if p, err := strconv.ParseFloat(matches[1], 64); err == nil {
+				result.Progress = int(p)
+				if result.Progress > 100 {
+					result.Progress = 100
+				}
+				if result.Progress < 0 {
+					result.Progress = 0
+				}
 			}
 		}
-	}
 
-	// 解析速度
-	speedRe := regexp.MustCompile(`(\d+\.?\d*\s*[KMG]?B/s)`)
-	if speedMatches := speedRe.FindStringSubmatch(text); len(speedMatches) > 1 {
-		result.Speed = speedMatches[1]
-	}
+		// 解析下载大小 - 格式: 913.30MB/1.22GB
+		sizeRe := regexp.MustCompile(`(\d+\.?\d*\s*[KMG]?B)/(\d+\.?\d*\s*[KMG]?B)`)
+		if sizeMatches := sizeRe.FindStringSubmatch(line); len(sizeMatches) > 2 {
+			result.DownloadedSize = sizeMatches[1]
+			result.TotalSize = sizeMatches[2]
+		}
 
-	// 解析下载大小 (格式: 16.80MB/1.24GB)
-	sizeRe := regexp.MustCompile(`(\d+\.?\d*\s*[KMG]?B)/(\d+\.?\d*\s*[KMG]?B)`)
-	if sizeMatches := sizeRe.FindStringSubmatch(text); len(sizeMatches) > 2 {
-		result.DownloadedSize = sizeMatches[1]
-		result.TotalSize = sizeMatches[2]
+		// 解析速度 - 格式: 3.10MBps 或 1.5GB/s (在时间前面的那个)
+		speedRe := regexp.MustCompile(`(\d+\.?\d*\s*[KMG]?B(?:ps|/s)?)\s+\d{2}:\d{2}:\d{2}$`)
+		if speedMatches := speedRe.FindStringSubmatch(line); len(speedMatches) > 1 {
+			result.Speed = speedMatches[1]
+		}
+
+		// 如果没有精确匹配到速度，尝试其他方式
+		if result.Speed == "" {
+			// 查找所有速度格式的匹配
+			speedRe := regexp.MustCompile(`(\d+\.?\d*\s*[KMG]?B(?:ps|/s)?)`)
+			if speedMatches := speedRe.FindAllStringSubmatch(line, -1); len(speedMatches) >= 2 {
+				// 第二个匹配通常是速度（在已下载/总大小后面）
+				result.Speed = speedMatches[1][1]
+			}
+		}
+
+		// 找到进度行就退出
+		if result.Progress > 0 || result.DownloadedSize != "" {
+			break
+		}
 	}
 
 	return result

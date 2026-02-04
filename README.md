@@ -21,6 +21,8 @@ cd /data/m3u8dl
 docker run -d --name m3u8dl -p 8089:8080 -e ALLOW_INSECURE=true -v ./downloads:/app/downloads ghcr.io/panoptes88/n_m3u8dl-re-web-ui:latest
 ```
 
+> **提示**：国内网络可将 `ghcr.io` 替换为 `ghcr.1ms.run`，避免镜像拉取失败。
+
 访问 http://localhost:8089
 
 ### 使用 Docker Compose（推荐）

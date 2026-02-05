@@ -5,12 +5,28 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"N_m3u8DL-RE-WEB-UI/internal/config"
 	"N_m3u8DL-RE-WEB-UI/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
+
+// 视频 MIME 类型映射（包级别变量，避免重复创建）
+var videoMimeTypes = map[string]string{
+	".mp4":  "video/mp4",
+	".webm": "video/webm",
+	".mkv":  "video/x-matroska",
+	".avi":  "video/x-msvideo",
+	".mov":  "video/quicktime",
+	".flv":  "video/x-flv",
+	".wmv":  "video/x-ms-wmv",
+	".m4v":  "video/x-m4v",
+	".3gp":  "video/3gpp",
+	".mpg":  "video/mpeg",
+	".mpeg": "video/mpeg",
+}
 
 func ListFiles(c *gin.Context) {
 	cfg := config.Load()
@@ -41,8 +57,9 @@ func DownloadFile(c *gin.Context) {
 	}
 
 	c.Header("Content-Description", "File Transfer")
+	c.Header("Accept-Ranges", "bytes")
+	c.Header("Content-Type", getVideoMimeType(filename))
 	c.Header("Content-Disposition", "attachment; filename="+url.PathEscape(filename))
-	c.Header("Content-Type", "application/octet-stream")
 	c.File(filePath)
 }
 
@@ -65,4 +82,12 @@ func DeleteFile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+}
+
+func getVideoMimeType(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if mime, ok := videoMimeTypes[ext]; ok {
+		return mime
+	}
+	return "application/octet-stream"
 }

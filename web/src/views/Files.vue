@@ -121,7 +121,7 @@ const columns = [
     dataIndex: 'modTime',
     key: 'modTime',
     width: 120,
-    sorter: (a, b) => new Date(a.modTime) - new Date(a.modTime),
+    sorter: (a, b) => new Date(a.modTime) - new Date(b.modTime),
     responsive: ['lg']
   },
   { title: '操作', key: 'action', width: 100 }

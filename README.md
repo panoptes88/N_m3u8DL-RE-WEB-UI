@@ -15,7 +15,7 @@
 
 | 首页 | 下载任务 | 文件管理 |
 |:---:|:---:|:---:|
-| ![首页](https://youke.xn--y7xa690gmna.cn/s1/2026/02/04/69830a5f6c07f.webp) | ![下载任务](https://youke.xn--y7xa690gmna.cn/s1/2026/02/04/69830a5fa806f.webp) | ![文件管理](https://youke.xn--y7xa690gmna.cn/s1/2026/02/04/69830a5fbc279.webp) |
+| ![首页](https://i.loi.li/j/0/2026/03/69a3d70ba4fa3.webp) | ![下载任务](https://i.loi.li/j/0/2026/03/69a3d7c3bb016.webp) | ![文件管理](https://i.loi.li/j/0/2026/03/69a3d80e450e2.webp) |
 
 ## 快速开始
 

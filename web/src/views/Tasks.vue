@@ -2,6 +2,25 @@
   <div class="tasks-page">
     <!-- 创建任务表单 -->
     <a-card title="创建下载任务">
+      <template #extra>
+        <a-space>
+          <a-select
+            v-model:value="selectedProfileId"
+            placeholder="选择下载方案"
+            style="width: 200px"
+            allow-clear
+            @change="handleProfileChange"
+          >
+            <a-select-option v-for="profile in profileStore.profiles" :key="profile.id" :value="profile.id">
+              {{ profile.name }}
+            </a-select-option>
+          </a-select>
+          <a-button @click="showProfileManager = true">
+            <template #icon><SettingOutlined /></template>
+            管理方案
+          </a-button>
+        </a-space>
+      </template>
       <a-form
         ref="formRef"
         :model="formState"
@@ -195,6 +214,7 @@
           <template v-if="column.key === 'action'">
             <a-space>
               <a-button size="small" @click="viewLog(record)">日志</a-button>
+              <a-button size="small" @click="saveAsProfile(record)">保存方案</a-button>
               <a-popconfirm
                 title="确定删除此任务？"
                 @confirm="handleDelete(record.id)"
@@ -223,22 +243,101 @@
         />
       </a-spin>
     </a-modal>
+
+    <!-- 方案管理弹窗 -->
+    <a-modal
+      v-model:open="showProfileManager"
+      title="下载方案管理"
+      :footer="null"
+      width="800px"
+    >
+      <a-table
+        :columns="profileColumns"
+        :data-source="profileStore.profiles"
+        :pagination="{ pageSize: 10 }"
+        :loading="profileStore.loading"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'name'">
+            <div v-if="editingProfileId === record.id">
+              <a-input
+                v-model:value="editingProfileName"
+                size="small"
+                @blur="saveProfileName(record)"
+                @pressEnter="saveProfileName(record)"
+                autofocus
+              />
+            </div>
+            <div v-else @dblclick="startEditProfileName(record)" style="cursor: pointer">
+              {{ record.name }}
+            </div>
+          </template>
+          <template v-if="column.key === 'created_at'">
+            {{ formatDate(record.created_at) }}
+          </template>
+          <template v-if="column.key === 'action'">
+            <!-- 桌面端显示全部按钮 -->
+            <a-space class="desktop-only">
+              <a-button size="small" @click="loadProfileToForm(record)">加载</a-button>
+              <a-button size="small" @click="viewProfileDetail(record)">详情</a-button>
+              <a-popconfirm
+                title="确定删除此方案？"
+                @confirm="handleDeleteProfile(record.id)"
+              >
+                <a-button size="small" danger>删除</a-button>
+              </a-popconfirm>
+            </a-space>
+            <!-- 移动端只显示加载按钮 -->
+            <div class="mobile-only">
+              <a-button size="small" @click="loadProfileToForm(record)">加载</a-button>
+            </div>
+          </template>
+        </template>
+      </a-table>
+    </a-modal>
+
+    <!-- 方案详情弹窗 -->
+    <a-modal
+      v-model:open="showProfileDetail"
+      title="方案详情"
+      :footer="null"
+      width="600px"
+    >
+      <a-descriptions v-if="currentProfile" bordered :column="1">
+        <a-descriptions-item label="ID">{{ currentProfile.id }}</a-descriptions-item>
+        <a-descriptions-item label="方案名称">{{ currentProfile.name }}</a-descriptions-item>
+        <a-descriptions-item label="域名">{{ currentProfile.domain || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="线程数">{{ currentProfile.thread_count }}</a-descriptions-item>
+        <a-descriptions-item label="重试次数">{{ currentProfile.retry_count }}</a-descriptions-item>
+        <a-descriptions-item label="请求头">{{ currentProfile.headers || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="Base URL">{{ currentProfile.base_url || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="下载后删除临时文件">{{ currentProfile.del_after_done ? '是' : '否' }}</a-descriptions-item>
+        <a-descriptions-item label="二进制合并">{{ currentProfile.binary_merge ? '是' : '否' }}</a-descriptions-item>
+        <a-descriptions-item label="自动选择轨道">{{ currentProfile.auto_select ? '是' : '否' }}</a-descriptions-item>
+        <a-descriptions-item label="解密引擎">{{ currentProfile.decryption_engine }}</a-descriptions-item>
+        <a-descriptions-item label="自定义参数">{{ currentProfile.custom_args || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="自定义代理">{{ currentProfile.custom_proxy || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="创建时间">{{ formatDate(currentProfile.created_at) }}</a-descriptions-item>
+      </a-descriptions>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { ReloadOutlined } from '@ant-design/icons-vue'
+import { ReloadOutlined, SettingOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore } from '../stores/task'
+import { useProfileStore } from '../stores/profile'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
 
 const taskStore = useTaskStore()
+const profileStore = useProfileStore()
 
 const creating = ref(false)
 const formRef = ref(null)
@@ -247,6 +346,12 @@ const keepFormAfterCreate = ref(false) // 创建后保留表单
 const logModalVisible = ref(false)
 const logLoading = ref(false)
 const logContent = ref('')
+const selectedProfileId = ref(null)
+const showProfileManager = ref(false)
+const showProfileDetail = ref(false)
+const currentProfile = ref(null)
+const editingProfileId = ref(null)
+const editingProfileName = ref('')
 
 // 表单数据
 const formState = reactive({
@@ -277,7 +382,15 @@ const columns = [
   { title: '状态', dataIndex: 'status', key: 'status', width: 70 },
   { title: '进度', dataIndex: 'progress', key: 'progress', width: 100 },
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 130, responsive: ['lg'] },
-  { title: '操作', key: 'action', width: 100 }
+  { title: '操作', key: 'action', width: 150 }
+]
+
+const profileColumns = [
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 50 },
+  { title: '方案名称', dataIndex: 'name', key: 'name', width: 150 },
+  { title: '域名', dataIndex: 'domain', key: 'domain', width: 150, responsive: ['lg'] },
+  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 100, responsive: ['lg'] },
+  { title: '操作', key: 'action', width: 150 }
 ]
 
 function getStatusColor(status) {
@@ -304,6 +417,38 @@ function getStatusText(status) {
 
 function formatTime(time) {
   return dayjs(time).format('YYYY-MM-DD HH:mm:ss')
+}
+
+function formatDate(time) {
+  return dayjs(time).format('YYYY-MM-DD')
+}
+
+function viewProfileDetail(profile) {
+  currentProfile.value = profile
+  showProfileDetail.value = true
+}
+
+function startEditProfileName(profile) {
+  editingProfileId.value = profile.id
+  editingProfileName.value = profile.name
+}
+
+async function saveProfileName(profile) {
+  if (!editingProfileName.value.trim()) {
+    message.error('方案名称不能为空')
+    editingProfileId.value = null
+    return
+  }
+
+  if (editingProfileName.value !== profile.name) {
+    try {
+      await profileStore.updateProfile(profile.id, { name: editingProfileName.value })
+      message.success('方案名称已更新')
+    } catch {
+      message.error('更新失败')
+    }
+  }
+  editingProfileId.value = null
 }
 
 async function fetchTasks() {
@@ -376,6 +521,59 @@ async function handleDelete(id) {
   }
 }
 
+// 保存任务为方案
+async function saveAsProfile(task) {
+  try {
+    await profileStore.saveTaskAsProfile(task.id)
+    message.success('方案保存成功')
+  } catch {
+    message.error('方案保存失败')
+  }
+}
+
+// 加载方案到表单
+function handleProfileChange(profileId) {
+  if (!profileId) {
+    resetForm()
+    return
+  }
+
+  const profile = profileStore.profiles.find(p => p.id === profileId)
+  if (profile) {
+    formState.threadCount = profile.thread_count
+    formState.retryCount = profile.retry_count
+    formState.headers = profile.headers || ''
+    formState.baseUrl = profile.base_url || ''
+    formState.delAfterDone = profile.del_after_done
+    formState.binaryMerge = profile.binary_merge
+    formState.autoSelect = profile.auto_select
+    formState.decryptionEngine = profile.decryption_engine
+    formState.customArgs = profile.custom_args || ''
+    formState.customProxy = profile.custom_proxy || ''
+    message.success(`已加载方案: ${profile.name}`)
+  }
+}
+
+// 从方案管理弹窗加载方案
+function loadProfileToForm(profile) {
+  selectedProfileId.value = profile.id
+  handleProfileChange(profile.id)
+  showProfileManager.value = false
+}
+
+// 删除方案
+async function handleDeleteProfile(id) {
+  try {
+    await profileStore.deleteProfile(id)
+    message.success('方案删除成功')
+    if (selectedProfileId.value === id) {
+      selectedProfileId.value = null
+    }
+  } catch {
+    message.error('方案删除失败')
+  }
+}
+
 async function viewLog(task) {
   logModalVisible.value = true
   logLoading.value = true
@@ -394,6 +592,8 @@ async function viewLog(task) {
 onMounted(() => {
   // 使用 store 统一管理的轮询（单例模式）
   taskStore.startPolling()
+  // 加载下载方案列表
+  profileStore.fetchProfiles()
 })
 
 onUnmounted(() => {
@@ -425,5 +625,24 @@ onUnmounted(() => {
 .log-modal :deep(.ant-modal-content) {
   max-width: 800px;
   margin: 0 auto;
+}
+
+/* 移动端和桌面端显示控制 */
+.mobile-only {
+  display: none;
+}
+
+.desktop-only {
+  display: flex;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: block;
+  }
+
+  .desktop-only {
+    display: none;
+  }
 }
 </style>

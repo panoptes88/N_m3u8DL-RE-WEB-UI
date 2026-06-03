@@ -87,6 +87,15 @@ func main() {
 			protected.GET("/files", handler.ListFiles)
 			protected.GET("/files/download", handler.DownloadFile)
 			protected.DELETE("/files/:name", handler.DeleteFile)
+
+			// 下载方案管理
+			protected.GET("/profiles", handler.ListProfiles)
+			protected.POST("/profiles", handler.CreateProfile)
+			protected.GET("/profiles/:id", handler.GetProfile)
+			protected.PUT("/profiles/:id", handler.UpdateProfile)
+			protected.DELETE("/profiles/:id", handler.DeleteProfile)
+			protected.GET("/profiles/by-domain", handler.GetProfileByDomain)
+			protected.POST("/tasks/:id/save-as-profile", handler.SaveTaskAsProfile)
 		}
 	}
 

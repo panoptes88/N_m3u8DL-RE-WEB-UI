@@ -15,7 +15,7 @@ type DownloadProfile struct {
 	RetryCount       int            `gorm:"default:15" json:"retry_count"`
 	Headers          string         `gorm:"size:2048" json:"headers,omitempty"`
 	BaseURL          string         `gorm:"size:1024" json:"base_url,omitempty"`
-	DelAfterDone     bool           `gorm:"default:true" json:"del_after_done"`
+	DelAfterDone     bool           `json:"del_after_done"`
 	BinaryMerge      bool           `gorm:"default:false" json:"binary_merge"`
 	AutoSelect       bool           `gorm:"default:false" json:"auto_select"`
 	Key              string         `gorm:"size:512" json:"key,omitempty"`

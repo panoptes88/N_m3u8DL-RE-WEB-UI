@@ -36,7 +36,10 @@ func ListProfiles(c *gin.Context) {
 	if domain != "" {
 		query = query.Where("domain = ?", domain)
 	}
-	query = query.Order("created_at DESC").Find(&profiles)
+	if err := query.Order("created_at DESC").Find(&profiles).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取方案列表失败: " + err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, profiles)
 }
@@ -212,7 +215,10 @@ func GetProfileByDomain(c *gin.Context) {
 	}
 
 	var profiles []model.DownloadProfile
-	model.GetDB().Where("domain = ?", domain).Order("updated_at DESC").Find(&profiles)
+	if err := model.GetDB().Where("domain = ?", domain).Order("updated_at DESC").Find(&profiles).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询方案失败: " + err.Error()})
+		return
+	}
 
 	if len(profiles) == 0 {
 		c.JSON(http.StatusOK, nil)

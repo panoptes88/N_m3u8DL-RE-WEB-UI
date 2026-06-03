@@ -264,7 +264,7 @@
                 v-model:value="editingProfileName"
                 size="small"
                 @blur="saveProfileName(record)"
-                @pressEnter="saveProfileName(record)"
+                @pressEnter="$event.target.blur()"
                 autofocus
               />
             </div>
@@ -534,7 +534,17 @@ async function saveAsProfile(task) {
 // 加载方案到表单
 function handleProfileChange(profileId) {
   if (!profileId) {
-    resetForm()
+    // 清除方案时只重置配置字段，保留 url 和 outputName
+    formState.threadCount = 32
+    formState.retryCount = 15
+    formState.headers = ''
+    formState.baseUrl = ''
+    formState.delAfterDone = true
+    formState.binaryMerge = false
+    formState.autoSelect = false
+    formState.decryptionEngine = 'MP4DECRYPT'
+    formState.customArgs = ''
+    formState.customProxy = ''
     return
   }
 

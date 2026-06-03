@@ -15,7 +15,7 @@
 
 | 首页 | 下载任务 | 文件管理 |
 |:---:|:---:|:---:|
-| ![首页](https://i.loi.li/j/0/2026/03/69a3d70ba4fa3.webp) | ![下载任务](https://i.loi.li/j/0/2026/03/69a3d7c3bb016.webp) | ![文件管理](https://i.loi.li/j/0/2026/03/69a3d80e450e2.webp) |
+| ![首页](https://i.loi.li/j/0/2026/03/69a3d70ba4fa3.webp) | ![下载任务](https://i.loi.li/j/0/2026/06/6a2054ffbc66e.png) | ![文件管理](https://i.loi.li/j/0/2026/03/69a3d80e450e2.webp) |
 
 ## 快速开始
 

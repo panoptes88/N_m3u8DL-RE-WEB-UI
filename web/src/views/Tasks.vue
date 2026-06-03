@@ -256,6 +256,7 @@
         :data-source="profileStore.profiles"
         :pagination="{ pageSize: 10 }"
         :loading="profileStore.loading"
+        :scroll="{ x: 600 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
@@ -276,8 +277,7 @@
             {{ formatDate(record.created_at) }}
           </template>
           <template v-if="column.key === 'action'">
-            <!-- 桌面端显示全部按钮 -->
-            <a-space class="desktop-only">
+            <a-space>
               <a-button size="small" @click="loadProfileToForm(record)">加载</a-button>
               <a-button size="small" @click="viewProfileDetail(record)">详情</a-button>
               <a-popconfirm
@@ -287,10 +287,6 @@
                 <a-button size="small" danger>删除</a-button>
               </a-popconfirm>
             </a-space>
-            <!-- 移动端只显示加载按钮 -->
-            <div class="mobile-only">
-              <a-button size="small" @click="loadProfileToForm(record)">加载</a-button>
-            </div>
           </template>
         </template>
       </a-table>
@@ -388,8 +384,8 @@ const columns = [
 const profileColumns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 50 },
   { title: '方案名称', dataIndex: 'name', key: 'name', width: 150 },
-  { title: '域名', dataIndex: 'domain', key: 'domain', width: 150, responsive: ['lg'] },
-  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 100, responsive: ['lg'] },
+  { title: '域名', dataIndex: 'domain', key: 'domain', width: 150 },
+  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 100 },
   { title: '操作', key: 'action', width: 150 }
 ]
 
@@ -635,24 +631,5 @@ onUnmounted(() => {
 .log-modal :deep(.ant-modal-content) {
   max-width: 800px;
   margin: 0 auto;
-}
-
-/* 移动端和桌面端显示控制 */
-.mobile-only {
-  display: none;
-}
-
-.desktop-only {
-  display: flex;
-}
-
-@media (max-width: 768px) {
-  .mobile-only {
-    display: block;
-  }
-
-  .desktop-only {
-    display: none;
-  }
 }
 </style>

@@ -14,7 +14,7 @@ COPY web/ .
 RUN npm run build
 
 # 构建后端
-FROM golang:1.25 AS backend
+FROM golang:1.26 AS backend
 
 WORKDIR /app
 

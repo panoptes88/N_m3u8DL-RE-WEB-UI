@@ -36,6 +36,10 @@ export function del(url) {
   return api.delete(url)
 }
 
+export function put(url, data) {
+  return api.put(url, data)
+}
+
 export function downloadFile(url, filename) {
   const link = document.createElement('a')
   link.href = `/api${url}&filename=${encodeURIComponent(filename)}`

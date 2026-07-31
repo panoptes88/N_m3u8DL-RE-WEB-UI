@@ -1,31 +1,23 @@
 <template>
-  <a-config-provider
-    :theme="{
-      algorithm: appStore.theme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
-      token: { colorPrimary: '#1677ff' }
-    }"
-  >
-    <div class="app-container" :class="{ dark: appStore.theme === 'dark' }">
+  <a-config-provider :theme="themeConfig">
+    <div class="app-container">
       <template v-if="userStore.isLoggedIn">
         <a-layout class="layout">
-          <!-- PC端左侧导航栏 (移动端隐藏) -->
+          <!-- PC端左侧导航栏 (移动端隐藏)；theme="light" 使背景走 colorBgContainer，亮暗自适应 -->
           <a-layout-sider
             v-model:collapsed="appStore.collapsed"
             :trigger="null"
             collapsible
+            theme="light"
             class="sider pc-sider"
-            :class="{ 'sider-dark': appStore.theme === 'dark', 'sider-collapsed-hidden': appStore.collapsed && isMobile }"
-            :width="200"
-            :collapsedWidth="80"
+            :class="{ 'sider-collapsed-hidden': appStore.collapsed && isMobile }"
+            :width="208"
+            :collapsed-width="72"
           >
-            <div class="logo">
-              <span v-if="!appStore.collapsed">N_m3u8DL-RE</span>
-              <span v-else>M3U8</span>
-            </div>
+            <BrandLogo :collapsed="appStore.collapsed" class="sider-logo" />
             <a-menu
               v-model:selectedKeys="selectedKeys"
               mode="inline"
-              :theme="appStore.theme"
               :items="menuItems"
               @click="handleMenuClick"
             />
@@ -33,7 +25,7 @@
 
           <a-layout>
             <!-- 顶部栏 -->
-            <a-layout-header class="header" :class="{ 'header-dark': appStore.theme === 'dark' }">
+            <a-layout-header class="header">
               <div class="header-left">
                 <!-- 移动端菜单图标 -->
                 <menu-unfold-outlined
@@ -54,10 +46,10 @@
               </div>
 
               <div class="header-right">
-                <a-space :size="16">
+                <a-space :size="8">
                   <!-- 主题切换 -->
                   <a-tooltip :title="appStore.theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'">
-                    <a-button type="text" @click="appStore.toggleTheme">
+                    <a-button type="text" class="header-action" @click="appStore.toggleTheme">
                       <template #icon>
                         <bulb-filled v-if="appStore.theme === 'dark'" />
                         <bulb-outlined v-else />
@@ -67,12 +59,12 @@
 
                   <!-- 用户下拉菜单 -->
                   <a-dropdown>
-                    <a-space class="user-dropdown">
-                      <a-avatar :size="28">
+                    <div class="user-dropdown">
+                      <a-avatar :size="30" class="user-avatar">
                         <template #icon><user-outlined /></template>
                       </a-avatar>
                       <span class="username">{{ userStore.username }}</span>
-                    </a-space>
+                    </div>
                     <template #overlay>
                       <a-menu @click="handleUserMenuClick">
                         <a-menu-item key="change-password">
@@ -102,19 +94,16 @@
         <a-drawer
           v-model:open="mobileMenuVisible"
           placement="left"
-          :width="200"
+          :width="208"
           :closable="false"
           :show-header="false"
           class="mobile-drawer"
           :body-style="{ padding: 0 }"
         >
-          <div class="mobile-menu-header">
-            <span>M3U8</span>
-          </div>
+          <BrandLogo class="sider-logo" />
           <a-menu
             v-model:selectedKeys="selectedKeys"
             mode="inline"
-            :theme="appStore.theme"
             :items="menuItems"
             @click="handleMobileMenuClick"
           />
@@ -147,13 +136,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, h } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { theme } from 'ant-design-vue'
 import { useUserStore } from './stores/user'
 import { useAppStore } from './stores/app'
+import { getThemeConfig } from './theme'
 import { post } from './api'
+import BrandLogo from './components/BrandLogo.vue'
 import {
   DashboardOutlined,
   CloudDownloadOutlined,
@@ -175,6 +165,8 @@ const appStore = useAppStore()
 const selectedKeys = ref(['dashboard'])
 const mobileMenuVisible = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
+
+const themeConfig = computed(() => getThemeConfig(appStore.theme))
 
 const handleResize = () => {
   isMobile.value = window.innerWidth <= 768
@@ -204,6 +196,17 @@ const menuItems = [
     label: '文件管理'
   }
 ]
+
+// 菜单选中态跟随路由（刷新、前进后退、直输 URL 时保持同步）
+watch(
+  () => route.name,
+  (name) => {
+    if (typeof name === 'string' && menuItems.some(item => item.key === name.toLowerCase())) {
+      selectedKeys.value = [name.toLowerCase()]
+    }
+  },
+  { immediate: true }
+)
 
 function handleMenuClick({ key }) {
   router.push({ name: key.charAt(0).toUpperCase() + key.slice(1) })
@@ -269,11 +272,7 @@ onUnmounted(() => {
 <style scoped>
 .app-container {
   min-height: 100vh;
-  background: #f0f2f5;
-}
-
-.app-container.dark {
-  background: #141414;
+  background: var(--bg-body);
 }
 
 .layout {
@@ -282,43 +281,29 @@ onUnmounted(() => {
 
 /* PC端侧边栏 */
 .sider {
-  background: #fff;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+  border-inline-end: 1px solid var(--border-soft);
 }
 
-.sider-dark {
-  background: #001529;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+.sider-logo {
+  border-bottom: 1px solid var(--border-soft);
 }
 
-.logo {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: bold;
-  color: #1677ff;
-  border-bottom: 1px solid #f0f0f0;
+.sider :deep(.ant-menu) {
+  border-inline-end: none;
+  padding: 8px 0;
 }
 
-.sider-dark .logo {
-  color: #fff;
-  border-bottom-color: #303030;
-}
-
+/* 顶部栏：吸顶 + 毛玻璃 */
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.header-dark {
-  background: #1f1f1f;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-soft);
+  backdrop-filter: saturate(180%) blur(10px);
+  -webkit-backdrop-filter: saturate(180%) blur(10px);
 }
 
 .header-left {
@@ -327,18 +312,17 @@ onUnmounted(() => {
 }
 
 .trigger {
-  font-size: 18px;
+  font-size: 17px;
   cursor: pointer;
-  transition: color 0.3s;
+  transition: color 0.2s;
   padding: 8px;
+  border-radius: 8px;
+  color: var(--text-2);
 }
 
 .trigger:hover {
-  color: #1677ff;
-}
-
-.header-dark .trigger {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--brand);
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .header-right {
@@ -346,13 +330,26 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.header-action {
+  color: var(--text-2);
+}
+
 .user-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
-  transition: opacity 0.3s;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
 }
 
 .user-dropdown:hover {
-  opacity: 0.8;
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.user-avatar {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
 }
 
 .username {
@@ -360,10 +357,8 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.header-dark .username {
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  color: var(--text-1);
 }
 
 .content {
@@ -382,23 +377,6 @@ onUnmounted(() => {
   display: none;
 }
 
-/* 移动端抽屉样式 */
-.mobile-menu-header {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: bold;
-  color: #1677ff;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-:global(.dark) .mobile-menu-header {
-  color: #fff;
-  border-bottom-color: #303030;
-}
-
 /* 移动端响应式 */
 @media (max-width: 768px) {
   .pc-sider {
@@ -414,7 +392,7 @@ onUnmounted(() => {
   }
 
   .header {
-    padding: 0 16px;
+    padding: 0 12px;
   }
 
   .content {
@@ -422,7 +400,7 @@ onUnmounted(() => {
   }
 
   .username {
-    max-width: 60px;
+    display: none;
   }
 }
 

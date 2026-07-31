@@ -1,21 +1,21 @@
 <template>
   <div class="files-page">
-    <a-card title="文件管理">
-      <template #extra>
-        <a-space>
-          <a-button @click="fetchFiles">
-            <template #icon><ReloadOutlined /></template>
-            刷新
-          </a-button>
-        </a-space>
-      </template>
+    <PageHeader title="文件管理" subtitle="浏览、播放与下载已完成的文件">
+      <a-button @click="fetchFiles">
+        <template #icon><ReloadOutlined /></template>
+        刷新
+      </a-button>
+    </PageHeader>
 
-      <div class="table-header" v-if="selectedRowKeys.length > 0">
-        <span>已选择 {{ selectedRowKeys.length }} 个文件</span>
-        <a-button type="primary" danger @click="batchDelete">
-          批量删除
-        </a-button>
-      </div>
+    <a-card class="app-card files-card">
+      <transition name="fade">
+        <div class="batch-bar" v-if="selectedRowKeys.length > 0">
+          <span class="batch-info">已选择 {{ selectedRowKeys.length }} 个文件</span>
+          <a-button type="primary" danger size="small" @click="batchDelete">
+            批量删除
+          </a-button>
+        </div>
+      </transition>
 
       <a-table
         :columns="columns"
@@ -29,10 +29,10 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
-            <a-space>
+            <a-space :size="8">
               <PlayCircleOutlined v-if="isVideoFile(record.name)" class="play-icon" @click="playVideo(record)" />
-              <FileOutlined v-else />
-              <span>{{ record.name }}</span>
+              <FileOutlined v-else class="file-icon" />
+              <span class="file-name">{{ record.name }}</span>
             </a-space>
           </template>
           <template v-if="column.key === 'size'">
@@ -42,15 +42,15 @@
             {{ record.modTime }}
           </template>
           <template v-if="column.key === 'action'">
-            <a-space>
-              <a-button size="small" @click="downloadFile(record.name)">
+            <a-space :size="4">
+              <a-button size="small" type="text" @click="downloadFile(record.name)">
                 下载
               </a-button>
               <a-popconfirm
                 title="确定删除此文件？"
                 @confirm="deleteFile(record.name)"
               >
-                <a-button size="small" danger>删除</a-button>
+                <a-button size="small" type="text" danger>删除</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -80,6 +80,7 @@ import { message } from 'ant-design-vue'
 import { ReloadOutlined, PlayCircleOutlined, FileOutlined } from '@ant-design/icons-vue'
 import { get, del } from '../api'
 import Player from 'xgplayer'
+import PageHeader from '../components/PageHeader.vue'
 
 const loading = ref(false)
 const files = ref([])
@@ -114,18 +115,18 @@ const columns = [
     title: '大小',
     dataIndex: 'size',
     key: 'size',
-    width: 80,
+    width: 90,
     sorter: (a, b) => a.size - b.size
   },
   {
     title: '修改时间',
     dataIndex: 'modTime',
     key: 'modTime',
-    width: 120,
+    width: 140,
     sorter: (a, b) => new Date(a.modTime) - new Date(b.modTime),
     responsive: ['lg']
   },
-  { title: '操作', key: 'action', width: 100 }
+  { title: '操作', key: 'action', width: 110 }
 ]
 
 const rowSelection = computed(() => ({
@@ -285,26 +286,54 @@ onMounted(() => {
   flex-direction: column;
 }
 
-.table-header {
+.files-card :deep(.ant-card-body) {
+  padding-top: 12px;
+}
+
+.batch-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  background: #fafafa;
-  border-radius: 8px;
-  border: 1px solid #f0f0f0;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.batch-info {
+  font-size: 13px;
+  color: var(--text-1);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .play-icon {
-  color: #1677ff;
+  color: var(--brand);
   cursor: pointer;
-  font-size: 18px;
-  transition: color 0.3s;
+  font-size: 17px;
+  transition: transform 0.2s;
 }
 
 .play-icon:hover {
-  color: #4096ff;
+  transform: scale(1.15);
+}
+
+.file-icon {
+  color: var(--text-3);
+  font-size: 16px;
+}
+
+.file-name {
+  color: var(--text-1);
 }
 
 .video-wrapper {

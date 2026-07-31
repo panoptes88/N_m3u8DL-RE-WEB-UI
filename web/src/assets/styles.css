@@ -1,79 +1,85 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+:root {
+  --brand: #6366f1;
+  --brand-strong: #4f46e5;
+  --bg-body: #f4f5f9;
+  --text-1: #1c2333;
+  --text-2: #5f6b85;
+  --text-3: #98a2b8;
+  --border-soft: #e8eaf2;
+  --surface: #ffffff;
+  --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.04);
+  --card-shadow-hover: 0 4px 6px rgba(16, 24, 40, 0.05), 0 10px 24px rgba(16, 24, 40, 0.08);
+}
+
+.dark {
+  --bg-body: #0e1017;
+  --text-1: rgba(255, 255, 255, 0.88);
+  --text-2: rgba(255, 255, 255, 0.55);
+  --text-3: rgba(255, 255, 255, 0.35);
+  --border-soft: #232838;
+  --surface: #151824;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --card-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #app {
   min-height: 100vh;
 }
 
-/* Ant Design 覆盖样式 */
-.ant-card {
-  border-radius: 8px;
+/* 页面卡片统一阴影与边框 */
+.app-card {
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--card-shadow);
 }
 
-.ant-btn {
-  border-radius: 6px;
+/* 表单分区标题 */
+.form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
 }
 
-.ant-input {
-  border-radius: 6px;
+.form-section-title::before {
+  content: '';
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--brand), #8b5cf6);
 }
 
-.ant-select-selector {
-  border-radius: 6px !important;
-}
-
-.ant-progress-text {
-  font-size: 12px;
-}
-
-/* 表格样式 */
-.ant-table {
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-/* 标签样式 */
-.ant-tag {
-  border-radius: 4px;
-}
-
-/* 进度条 */
-.ant-progress-inner {
-  border-radius: 4px;
-}
-
-.ant-progress-bg {
-  border-radius: 4px;
-}
-
-/* 模态框 */
-.ant-modal-content {
-  border-radius: 12px;
-}
-
-/* 滚动条样式 */
+/* 滚动条 */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: rgba(100, 116, 139, 0.3);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: rgba(100, 116, 139, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
 }

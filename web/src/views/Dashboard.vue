@@ -1,48 +1,22 @@
 <template>
   <div class="dashboard">
-    <a-row :gutter="16" class="stats-row">
-      <a-col :xs="24" :sm="8" :md="8">
-        <a-card>
-          <a-statistic
-            title="等待中任务"
-            :value="pendingCount"
-            :value-style="{ color: '#faad14' }"
-          >
-            <template #prefix>
-              <ClockCircleOutlined />
-            </template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :xs="24" :sm="8" :md="8">
-        <a-card>
-          <a-statistic
-            title="下载中任务"
-            :value="downloadingCount"
-            :value-style="{ color: '#1677ff' }"
-          >
-            <template #prefix>
-              <CloudDownloadOutlined />
-            </template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :xs="24" :sm="8" :md="8">
-        <a-card>
-          <a-statistic
-            title="已完成任务"
-            :value="completedCount"
-            :value-style="{ color: '#52c41a' }"
-          >
-            <template #prefix>
-              <CheckCircleOutlined />
-            </template>
-          </a-statistic>
-        </a-card>
+    <PageHeader title="首页" subtitle="下载任务概览与快速创建" />
+
+    <a-row :gutter="[16, 16]" class="stats-row">
+      <a-col v-for="stat in stats" :key="stat.label" :xs="24" :sm="8">
+        <div class="stat-card">
+          <div class="stat-icon" :style="{ background: `${stat.color}1a`, color: stat.color }">
+            <component :is="stat.icon" />
+          </div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stat.value }}</div>
+            <div class="stat-label">{{ stat.label }}</div>
+          </div>
+        </div>
       </a-col>
     </a-row>
 
-    <a-card title="快速下载" class="quick-download">
+    <a-card title="快速下载" class="app-card quick-download">
       <a-form layout="vertical" :model="quickDownloadForm">
         <a-form-item
           label="m3u8 URL"
@@ -72,6 +46,7 @@
                 :loading="quickDownloadLoading"
                 @click="handleQuickDownload"
               >
+                <template #icon><CloudDownloadOutlined /></template>
                 开始下载
               </a-button>
             </a-form-item>
@@ -80,7 +55,7 @@
       </a-form>
     </a-card>
 
-    <a-card title="最近任务" class="recent-tasks">
+    <a-card title="最近任务" class="app-card recent-tasks">
       <template #extra>
         <a-button type="link" @click="$router.push('/tasks')">查看全部</a-button>
       </template>
@@ -88,27 +63,27 @@
         :columns="columns"
         :data-source="recentTasks"
         :pagination="false"
-        size="small"
+        size="middle"
         :loading="loading"
         :scroll="{ x: 500 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'status'">
-            <a-tag :color="getStatusColor(record.status)">
-              {{ getStatusText(record.status) }}
-            </a-tag>
+            <StatusTag :status="record.status" />
           </template>
           <template v-if="column.key === 'progress'">
             <a-progress
               :percent="record.progress"
               :status="record.status === 'failed' ? 'exception' : 'active'"
+              :stroke-color="record.status === 'failed' ? undefined : progressGradient"
               size="small"
             />
           </template>
           <template v-if="column.key === 'action'">
-            <a-space>
+            <a-space :size="4">
               <a-button
                 size="small"
+                type="text"
                 @click="viewLog(record)"
               >
                 日志
@@ -117,7 +92,7 @@
                 title="确定删除此任务？"
                 @confirm="deleteTask(record.id)"
               >
-                <a-button size="small" danger>删除</a-button>
+                <a-button size="small" type="text" danger>删除</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -125,26 +100,12 @@
       </a-table>
     </a-card>
 
-    <a-modal
-      v-model:open="logModalVisible"
-      title="任务日志"
-      :footer="null"
-      class="log-modal"
-    >
-      <a-spin :spinning="logLoading">
-        <a-textarea
-          v-model:value="logContent"
-          :rows="15"
-          readonly
-          style="font-family: monospace"
-        />
-      </a-spin>
-    </a-modal>
+    <TaskLogModal v-model:open="logModalVisible" :task-id="logTaskId" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   ClockCircleOutlined,
@@ -152,6 +113,9 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons-vue'
 import { useTaskStore } from '../stores/task'
+import PageHeader from '../components/PageHeader.vue'
+import StatusTag from '../components/StatusTag.vue'
+import TaskLogModal from '../components/TaskLogModal.vue'
 
 const taskStore = useTaskStore()
 
@@ -159,14 +123,15 @@ const loading = ref(false)
 const quickDownloadLoading = ref(false)
 const quickDownloadForm = ref({ url: '', outputName: '' })
 const logModalVisible = ref(false)
-const logLoading = ref(false)
-const logContent = ref('')
+const logTaskId = ref(null)
+
+const progressGradient = { from: '#6366f1', to: '#8b5cf6' }
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 50 },
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
   { title: 'URL', dataIndex: 'url', key: 'url', ellipsis: true },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 70 },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 100 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 130 },
   { title: '操作', key: 'action', width: 120 }
 ]
 
@@ -175,27 +140,11 @@ const pendingCount = computed(() => taskStore.tasks.filter(t => t.status === 'pe
 const downloadingCount = computed(() => taskStore.tasks.filter(t => t.status === 'downloading').length)
 const completedCount = computed(() => taskStore.tasks.filter(t => t.status === 'completed').length)
 
-function getStatusColor(status) {
-  const colors = {
-    pending: 'orange',
-    downloading: 'blue',
-    completed: 'green',
-    failed: 'red',
-    interrupted: 'gold'
-  }
-  return colors[status] || 'default'
-}
-
-function getStatusText(status) {
-  const texts = {
-    pending: '等待中',
-    downloading: '下载中',
-    completed: '已完成',
-    failed: '下载失败',
-    interrupted: '已中断'
-  }
-  return texts[status] || status
-}
+const stats = computed(() => [
+  { label: '等待中任务', value: pendingCount.value, color: '#f59e0b', icon: ClockCircleOutlined },
+  { label: '下载中任务', value: downloadingCount.value, color: '#6366f1', icon: CloudDownloadOutlined },
+  { label: '已完成任务', value: completedCount.value, color: '#10b981', icon: CheckCircleOutlined }
+])
 
 async function handleQuickDownload() {
   if (!quickDownloadForm.value.url) {
@@ -218,19 +167,9 @@ async function handleQuickDownload() {
   }
 }
 
-async function viewLog(task) {
+function viewLog(task) {
+  logTaskId.value = task.id
   logModalVisible.value = true
-  logLoading.value = true
-  logContent.value = ''
-
-  try {
-    const res = await taskStore.getTaskLog(task.id)
-    logContent.value = res.log || '暂无日志'
-  } catch {
-    message.error('获取日志失败')
-  } finally {
-    logLoading.value = false
-  }
 }
 
 async function deleteTask(id) {
@@ -246,11 +185,6 @@ onMounted(() => {
   // 使用 store 统一管理的轮询（单例模式）
   taskStore.startPolling()
 })
-
-onUnmounted(() => {
-  // 不停止轮询，因为 Tasks 页面可能还在使用
-  // 轮询由 store 统一管理
-})
 </script>
 
 <style scoped>
@@ -260,8 +194,47 @@ onUnmounted(() => {
   gap: 16px;
 }
 
-.stats-row {
-  margin-bottom: 16px;
+/* 统计卡片 */
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--card-shadow);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.stat-icon {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-2);
 }
 
 .btn-col {
@@ -269,47 +242,19 @@ onUnmounted(() => {
   align-items: flex-end;
 }
 
-@media (max-width: 576px) {
-  .stats-row :deep(.ant-card-body) {
-    padding: 12px;
-  }
-  .stats-row :deep(.ant-statistic-title) {
-    font-size: 12px;
-  }
-  .stats-row :deep(.ant-statistic-content) {
-    font-size: 20px;
-  }
-}
-
-.quick-download {
-  margin-bottom: 16px;
-}
-
 .recent-tasks {
   flex: 1;
 }
 
-.size-text {
-  font-size: 12px;
-  color: #999;
-  margin-left: 4px;
-}
-
-.log-modal {
-  max-width: calc(100vw - 32px);
-}
-
-.log-modal :deep(.ant-modal-body) {
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.log-modal :deep(.ant-modal-content) {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
 @media (max-width: 576px) {
+  .stat-card {
+    padding: 16px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+
   .recent-tasks :deep(.ant-table-cell) {
     padding: 8px !important;
   }

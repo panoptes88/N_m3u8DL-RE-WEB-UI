@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -20,19 +20,21 @@ import (
 
 // CreateTaskRequest 创建任务请求
 type CreateTaskRequest struct {
-	URL              string `json:"url"`
-	OutputName       string `json:"output_name"`
-	ThreadCount      int    `json:"thread_count"`
-	RetryCount       int    `json:"retry_count"`
-	Headers          string `json:"headers"`
-	BaseURL          string `json:"base_url"`
-	DelAfterDone     bool   `json:"del_after_done"`
-	BinaryMerge      bool   `json:"binary_merge"`
-	AutoSelect       bool   `json:"auto_select"`
-	Key              string `json:"key"`
-	DecryptionEngine string `json:"decryption_engine"`
-	CustomArgs       string `json:"custom_args"`
-	CustomProxy      string `json:"custom_proxy"`
+	URL                string `json:"url"`
+	OutputName         string `json:"output_name"`
+	ThreadCount        int    `json:"thread_count"`
+	RetryCount         int    `json:"retry_count"`
+	Headers            string `json:"headers"`
+	BaseURL            string `json:"base_url"`
+	DelAfterDone       *bool  `json:"del_after_done"`
+	BinaryMerge        bool   `json:"binary_merge"`
+	AutoSelect         bool   `json:"auto_select"`
+	SkipSegmentsCheck  bool   `json:"skip_segments_check"`
+	ConcurrentDownload bool   `json:"concurrent_download"`
+	Key                string `json:"key"`
+	DecryptionEngine   string `json:"decryption_engine"`
+	CustomArgs         string `json:"custom_args"`
+	CustomProxy        string `json:"custom_proxy"`
 }
 
 func InitAdminUser(password string) {
@@ -92,22 +94,29 @@ func CreateTask(req *CreateTaskRequest) (*model.Task, error) {
 	if decryptionEngine == "" {
 		decryptionEngine = "MP4DECRYPT"
 	}
+	// 未指定时默认下载完成后删除临时文件
+	delAfterDone := true
+	if req.DelAfterDone != nil {
+		delAfterDone = *req.DelAfterDone
+	}
 
 	task := model.Task{
-		URL:               req.URL,
-		Status:            model.TaskStatusPending,
-		OutputName:        outputName,
-		ThreadCount:       threadCount,
-		RetryCount:        retryCount,
-		Headers:           req.Headers,
-		BaseURL:           req.BaseURL,
-		DelAfterDone:      req.DelAfterDone,
-		BinaryMerge:       req.BinaryMerge,
-		AutoSelect:        req.AutoSelect,
-		Key:               req.Key,
-		DecryptionEngine:  decryptionEngine,
-		CustomArgs:        req.CustomArgs,
-		CustomProxy:       req.CustomProxy,
+		URL:                req.URL,
+		Status:             model.TaskStatusPending,
+		OutputName:         outputName,
+		ThreadCount:        threadCount,
+		RetryCount:         retryCount,
+		Headers:            req.Headers,
+		BaseURL:            req.BaseURL,
+		DelAfterDone:       delAfterDone,
+		BinaryMerge:        req.BinaryMerge,
+		AutoSelect:         req.AutoSelect,
+		SkipSegmentsCheck:  req.SkipSegmentsCheck,
+		ConcurrentDownload: req.ConcurrentDownload,
+		Key:                req.Key,
+		DecryptionEngine:   decryptionEngine,
+		CustomArgs:         req.CustomArgs,
+		CustomProxy:        req.CustomProxy,
 	}
 
 	if err := model.GetDB().Create(&task).Error; err != nil {
@@ -169,12 +178,17 @@ func GetTaskLog(id uint) (string, error) {
 		return "", nil
 	}
 
-	content, err := ioutil.ReadFile(task.LogFile)
+	// 日志可能很大，只读取末尾部分
+	content, truncated, err := readLogTail(task.LogFile, 256*1024)
 	if err != nil {
 		return "", err
 	}
+	content = normalizeLogContent(content)
+	if truncated {
+		content = "……（日志过长，仅显示末尾部分）……\n\n" + content
+	}
 
-	return string(content), nil
+	return content, nil
 }
 
 func ListFiles(downloadDir string) ([]map[string]interface{}, error) {
@@ -248,20 +262,26 @@ func StartTaskPolling(cfg *config.Config) {
 }
 
 func startDownloadTask(taskID uint, cfg *config.Config) {
+	// 原子抢占：仅当任务仍处于 pending 时才置为 downloading，
+	// 防止轮询间隔内同一任务被重复启动
+	res := model.GetDB().Model(&model.Task{}).
+		Where("id = ? AND status = ?", taskID, model.TaskStatusPending).
+		Update("status", model.TaskStatusDownloading)
+	if res.Error != nil || res.RowsAffected == 0 {
+		return
+	}
+
 	task, err := GetTaskByID(taskID)
 	if err != nil {
 		log.Printf("获取任务失败: %v", err)
 		return
 	}
 
-	task.Status = model.TaskStatusDownloading
-	task.PID = -1
-	model.GetDB().Save(task)
-
 	// 日志文件放在 downloads/Logs 目录下
 	logDir := filepath.Join(cfg.DownloadDir, "Logs")
 	os.MkdirAll(logDir, 0755)
 	logFile := filepath.Join(logDir, fmt.Sprintf("task_%d.log", task.ID))
+	task.PID = -1
 	task.LogFile = logFile
 	model.GetDB().Save(task)
 
@@ -276,11 +296,19 @@ func startDownloadTask(taskID uint, cfg *config.Config) {
 	ctx := context.Background()
 	timeout := cfg.GetDownloadTimeout()
 	if timeout > 0 {
-		ctx, _ = context.WithTimeout(ctx, timeout)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
 	}
 
 	cmd := exec.CommandContext(ctx, cfg.GetN_m3u8DLREPath(), args...)
-	cmd.Stdout = openLogFile(logFile)
+	// 容器环境默认没有 TERM，v0.6+ 的 tput 调用会因缺失而报错
+	cmd.Env = os.Environ()
+	if os.Getenv("TERM") == "" {
+		cmd.Env = append(cmd.Env, "TERM=xterm")
+	}
+	logOut := openLogFile(logFile)
+	cmd.Stdout = logOut
 	cmd.Stderr = cmd.Stdout
 
 	log.Printf("开始下载任务 %d: %s", task.ID, task.URL)
@@ -301,6 +329,11 @@ func startDownloadTask(taskID uint, cfg *config.Config) {
 			cmd.Process.Kill()
 		}
 		log.Printf("任务 %d 退出错误: %v", task.ID, err)
+	}
+
+	// 关闭日志文件句柄（openLogFile 失败时回退为 os.Stdout，不能关）
+	if logOut != os.Stdout {
+		logOut.Close()
 	}
 
 	updateTaskStatus(task.ID)
@@ -358,6 +391,16 @@ func buildCommandArgs(task *model.Task, cfg *config.Config) []string {
 	// 自动选择最佳轨道
 	if task.AutoSelect {
 		args = append(args, "--auto-select")
+	}
+
+	// 分片数量完整性检测（默认开启，勾选跳过后显式传 False）
+	if task.SkipSegmentsCheck {
+		args = append(args, "--check-segments-count", "False")
+	}
+
+	// 并行下载音视频（-mt），并在完成后混流为 mp4
+	if task.ConcurrentDownload {
+		args = append(args, "-mt", "-M", "format=mp4")
 	}
 
 	// 解密
@@ -430,9 +473,8 @@ func updateTaskStatus(taskID uint) {
 		}
 	}
 
-	// 如果进程还在运行
+	// 进程还在运行：保存进度并保留 PID（供后续轮询检测及删除任务时终止进程）
 	if processStillRunning {
-		task.PID = 0
 		model.GetDB().Save(task)
 		return
 	}
@@ -441,8 +483,7 @@ func updateTaskStatus(taskID uint) {
 	if task.Status == model.TaskStatusDownloading {
 		if logFileRecentlyUpdated {
 			// 日志最近有更新，检查是否已完成
-			if logContent, err := ioutil.ReadFile(logFile); err == nil {
-				content := string(logContent)
+			if content, _, err := readLogTail(logFile, 256*1024); err == nil {
 				if strings.Contains(content, "合并完成") || strings.Contains(content, "downloaded successfully") || strings.Contains(content, " Done") {
 					task.Status = model.TaskStatusCompleted
 					now := time.Now()
@@ -469,8 +510,7 @@ func updateTaskStatus(taskID uint) {
 	}
 
 	// 进程已结束，检查日志更新状态
-	if logContent, err := ioutil.ReadFile(logFile); err == nil {
-		content := string(logContent)
+	if content, _, err := readLogTail(logFile, 256*1024); err == nil {
 		// 检查完成状态
 		if strings.Contains(content, "合并完成") || strings.Contains(content, "downloaded successfully") || strings.Contains(content, " Done") {
 			task.Status = model.TaskStatusCompleted
@@ -509,10 +549,10 @@ func updateTaskFailed(taskID uint, errorMsg string) {
 
 // ProgressInfo 下载进度信息
 type ProgressInfo struct {
-	Progress      int
-	Speed         string
+	Progress       int
+	Speed          string
 	DownloadedSize string
-	TotalSize     string
+	TotalSize      string
 }
 
 // cleanANSI 清理ANSI转义码和特殊Unicode字符
@@ -529,26 +569,27 @@ func cleanANSI(s string) string {
 }
 
 func parseProgress(logFile string) *ProgressInfo {
-	content, err := ioutil.ReadFile(logFile)
+	// 进度行在日志末尾，只读尾部避免长日志全量读入
+	content, _, err := readLogTail(logFile, 64*1024)
 	if err != nil {
 		return nil
 	}
 
-	lines := strings.Split(string(content), "\n")
+	// v0.6+ 重定向日志无换行，先规整切分再按行扫描
+	lines := strings.Split(normalizeLogContent(content), "\n")
 	result := &ProgressInfo{}
 
-	// 只从最后几行查找进度信息
+	// 只从最后几行查找视频轨道进度
+	// v0.5 格式: Vid Kbps 1268/1735 73.08% 913.30MB/1.22GB 3.10MBps 00:01:09
+	// v0.6+ 格式: Vid 1920x1080 | 2790 Kbps | ... ━━━ 25/49 51.02%450.20MB 2.10MBps 00:00:20
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := cleanANSI(lines[i])
 		line = strings.TrimSpace(line)
 
-		// 跳过空行
-		if line == "" {
+		// 跳过空行和非视频轨道行（Aud/Sub 行不代表整体进度）
+		if line == "" || !strings.HasPrefix(line, "Vid") {
 			continue
 		}
-
-		// 解析完整进度行
-		// 格式: Vid Kbps 1268/1735 73.08% 913.30MB/1.22GB 3.10MBps 00:01:09
 
 		// 解析进度百分比
 		progressRe := regexp.MustCompile(`(\d+\.?\d*)%`)
@@ -604,4 +645,60 @@ func openLogFile(path string) *os.File {
 		return os.Stdout
 	}
 	return file
+}
+
+// readLogTail 读取日志文件末尾 maxBytes 字节，避免长日志全量读入内存。
+// truncated 为 true 时表示内容被截断，不完整的首行已被丢弃。
+func readLogTail(path string, maxBytes int64) (string, bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false, err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return "", false, err
+	}
+
+	offset := int64(0)
+	if info.Size() > maxBytes {
+		offset = info.Size() - maxBytes
+	}
+
+	buf := make([]byte, info.Size()-offset)
+	if _, err := f.ReadAt(buf, offset); err != nil && err != io.EOF {
+		return "", false, err
+	}
+
+	truncated := offset > 0
+	if truncated {
+		// 只在开头小窗口内找换行符对齐首行；
+		// 日志以稀疏换行格式写入时（如 v0.6+ 重定向输出）避免把全部内容丢弃
+		window := string(buf)
+		if len(window) > 4096 {
+			window = window[:4096]
+		}
+		if idx := strings.IndexByte(window, '\n'); idx != -1 {
+			buf = buf[idx+1:]
+		}
+	}
+	return string(buf), truncated, nil
+}
+
+var (
+	// 日志条目起始模式，如 "18:43:35.061 WARN"
+	logEntryRe = regexp.MustCompile(`(\d{2}:\d{2}:\d{2}\.\d{3}\s+(?:INFO|WARN|ERROR|VERB))`)
+	// v0.6+ 进度表格行起始模式，如 "Sub en | English"、"Vid 1920x1080 | 2790 Kbps"
+	logTableRowRe  = regexp.MustCompile(`((?:Sub|Vid|Aud)\s+\S[^\n|]*\s\|\s)`)
+	multiNewlineRe = regexp.MustCompile(`\n{2,}`)
+)
+
+// normalizeLogContent 把无换行的日志（v0.6+ 重定向输出）切分为可读的行；
+// 对本身有换行的日志处理后内容不变
+func normalizeLogContent(s string) string {
+	s = logEntryRe.ReplaceAllString(s, "\n$1")
+	s = logTableRowRe.ReplaceAllString(s, "\n$1")
+	s = multiNewlineRe.ReplaceAllString(s, "\n")
+	return strings.TrimLeft(s, "\n")
 }

@@ -12,19 +12,21 @@ import (
 
 // CreateProfileRequest 创建方案请求
 type CreateProfileRequest struct {
-	Name             string `json:"name" binding:"required"`
-	Domain           string `json:"domain"`
-	ThreadCount      int    `json:"thread_count"`
-	RetryCount       int    `json:"retry_count"`
-	Headers          string `json:"headers"`
-	BaseURL          string `json:"base_url"`
-	DelAfterDone     *bool  `json:"del_after_done"`
-	BinaryMerge      *bool  `json:"binary_merge"`
-	AutoSelect       *bool  `json:"auto_select"`
-	Key              string `json:"key"`
-	DecryptionEngine string `json:"decryption_engine"`
-	CustomArgs       string `json:"custom_args"`
-	CustomProxy      string `json:"custom_proxy"`
+	Name               string `json:"name" binding:"required"`
+	Domain             string `json:"domain"`
+	ThreadCount        int    `json:"thread_count"`
+	RetryCount         int    `json:"retry_count"`
+	Headers            string `json:"headers"`
+	BaseURL            string `json:"base_url"`
+	DelAfterDone       *bool  `json:"del_after_done"`
+	BinaryMerge        *bool  `json:"binary_merge"`
+	AutoSelect         *bool  `json:"auto_select"`
+	SkipSegmentsCheck  *bool  `json:"skip_segments_check"`
+	ConcurrentDownload *bool  `json:"concurrent_download"`
+	Key                string `json:"key"`
+	DecryptionEngine   string `json:"decryption_engine"`
+	CustomArgs         string `json:"custom_args"`
+	CustomProxy        string `json:"custom_proxy"`
 }
 
 // ListProfiles 获取方案列表
@@ -83,20 +85,30 @@ func CreateProfile(c *gin.Context) {
 	if req.AutoSelect != nil {
 		autoSelect = *req.AutoSelect
 	}
+	skipSegmentsCheck := false
+	if req.SkipSegmentsCheck != nil {
+		skipSegmentsCheck = *req.SkipSegmentsCheck
+	}
+	concurrentDownload := false
+	if req.ConcurrentDownload != nil {
+		concurrentDownload = *req.ConcurrentDownload
+	}
 
 	profile := &model.DownloadProfile{
-		Name:             req.Name,
-		Domain:           req.Domain,
-		ThreadCount:      req.ThreadCount,
-		RetryCount:       req.RetryCount,
-		Headers:          req.Headers,
-		BaseURL:          req.BaseURL,
-		DelAfterDone:     delAfterDone,
-		BinaryMerge:      binaryMerge,
-		AutoSelect:       autoSelect,
-		DecryptionEngine: req.DecryptionEngine,
-		CustomArgs:       req.CustomArgs,
-		CustomProxy:      req.CustomProxy,
+		Name:               req.Name,
+		Domain:             req.Domain,
+		ThreadCount:        req.ThreadCount,
+		RetryCount:         req.RetryCount,
+		Headers:            req.Headers,
+		BaseURL:            req.BaseURL,
+		DelAfterDone:       delAfterDone,
+		BinaryMerge:        binaryMerge,
+		AutoSelect:         autoSelect,
+		SkipSegmentsCheck:  skipSegmentsCheck,
+		ConcurrentDownload: concurrentDownload,
+		DecryptionEngine:   req.DecryptionEngine,
+		CustomArgs:         req.CustomArgs,
+		CustomProxy:        req.CustomProxy,
 	}
 
 	if err := model.GetDB().Create(profile).Error; err != nil {
@@ -171,6 +183,12 @@ func UpdateProfile(c *gin.Context) {
 	}
 	if req.AutoSelect != nil {
 		profile.AutoSelect = *req.AutoSelect
+	}
+	if req.SkipSegmentsCheck != nil {
+		profile.SkipSegmentsCheck = *req.SkipSegmentsCheck
+	}
+	if req.ConcurrentDownload != nil {
+		profile.ConcurrentDownload = *req.ConcurrentDownload
 	}
 	if req.DecryptionEngine != "" {
 		profile.DecryptionEngine = req.DecryptionEngine
@@ -263,18 +281,20 @@ func SaveTaskAsProfile(c *gin.Context) {
 	}
 
 	profile := &model.DownloadProfile{
-		Name:             name,
-		Domain:           domain,
-		ThreadCount:      task.ThreadCount,
-		RetryCount:       task.RetryCount,
-		Headers:          task.Headers,
-		BaseURL:          task.BaseURL,
-		DelAfterDone:     task.DelAfterDone,
-		BinaryMerge:      task.BinaryMerge,
-		AutoSelect:       task.AutoSelect,
-		DecryptionEngine: task.DecryptionEngine,
-		CustomArgs:       task.CustomArgs,
-		CustomProxy:      task.CustomProxy,
+		Name:               name,
+		Domain:             domain,
+		ThreadCount:        task.ThreadCount,
+		RetryCount:         task.RetryCount,
+		Headers:            task.Headers,
+		BaseURL:            task.BaseURL,
+		DelAfterDone:       task.DelAfterDone,
+		BinaryMerge:        task.BinaryMerge,
+		AutoSelect:         task.AutoSelect,
+		SkipSegmentsCheck:  task.SkipSegmentsCheck,
+		ConcurrentDownload: task.ConcurrentDownload,
+		DecryptionEngine:   task.DecryptionEngine,
+		CustomArgs:         task.CustomArgs,
+		CustomProxy:        task.CustomProxy,
 	}
 
 	if err := model.GetDB().Create(profile).Error; err != nil {

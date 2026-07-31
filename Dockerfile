@@ -30,7 +30,7 @@ ENV GOPROXY=https://goproxy.cn,direct
 RUN go mod tidy && CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o server ./cmd/server
 
 # 下载二进制文件阶段
-FROM alpine:3.23 AS downloader
+FROM alpine:3.24 AS downloader
 
 WORKDIR /tmp
 
@@ -38,6 +38,7 @@ WORKDIR /tmp
 RUN apk add --no-cache wget unzip tar xz
 
 # 下载 N_m3u8DL-RE
+# 注：v0.6.0-beta 存在重定向日志无换行、tput 依赖 TERM 的问题，待上游修复后再评估升级
 RUN wget -q https://github.com/nilaoda/N_m3u8DL-RE/releases/download/v0.5.1-beta/N_m3u8DL-RE_v0.5.1-beta_linux-x64_20251029.tar.gz && \
     tar -xzf N_m3u8DL-RE_v0.5.1-beta_linux-x64_20251029.tar.gz
 

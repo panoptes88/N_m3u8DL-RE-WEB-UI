@@ -18,6 +18,8 @@ services:
       - DOWNLOAD_TIMEOUT=0
       # 时区配置
       - TZ=Asia/Shanghai
+      # 语言/字符集配置（使容器内中文文件名正常显示，避免 ls 转义）
+      - LANG=C.UTF-8
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/user"]

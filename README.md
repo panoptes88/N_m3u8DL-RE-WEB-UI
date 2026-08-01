@@ -4,11 +4,13 @@
 
 ## 功能特性
 
-- 用户认证（单用户登录）
-- 创建和管理下载任务
-- 实时查看下载进度
-- 下载历史记录
-- 文件浏览和管理
+- 用户认证（单用户登录、修改密码）
+- 创建和管理下载任务，实时查看下载进度与日志
+- 下载方案（按域名保存常用配置，新建任务自动匹配）
+- 自动选择最佳视频+音频并合并为 mp4、并行下载、跳过分片完整性检测
+- 解密支持（mp4decrypt）、自定义请求头、代理、自定义参数
+- 文件浏览、下载与管理
+- URL / 输出文件名点击复制
 - Docker 容器化部署
 
 ## 界面预览
@@ -64,7 +66,9 @@ N_m3u8DL-RE_WEB_UI/
 │   │   ├── stores/       # Pinia 状态管理
 │   │   └── api/          # API 调用
 │   └── package.json
-├── bin/                  # 二进制工具目录（需要自行准备）
+├── db/                   # 数据库目录（运行时生成）
+├── downloads/            # 下载文件目录（运行时生成）
+├── bin/                  # 二进制工具目录（仅源码部署需手动准备；Docker 部署自动下载）
 ├── Dockerfile
 ├── docker-compose.yml
 └── README.md
@@ -80,6 +84,7 @@ N_m3u8DL-RE_WEB_UI/
 | 🔴 | DOWNLOAD_DIR | ./downloads | 下载文件目录 |
 | 🔴 | BIN_DIR | ./bin | 工具目录 |
 | 🔴 | DB_PATH | ./db/data.db | 数据库文件路径 |
+| 🔴 | LANG | C.UTF-8 | 容器字符集，影响终端内中文文件名显示（镜像已内置） |
 | 🟢 | ADMIN_PASSWORD | admin123 | 管理员密码 |
 | 🟢 | TZ | Asia/Shanghai | 时区设置 |
 | 🟢 | ALLOW_INSECURE | false | 是否允许非 HTTPS 环境，如需 HTTP 访问需设为 true |
@@ -106,11 +111,17 @@ N_m3u8DL-RE_WEB_UI/
 #### TZ
 容器内部时区，影响日志时间显示。推荐使用 Asia/Shanghai。
 
+#### LANG
+容器字符集。设为 `C.UTF-8` 可使容器终端（如 `docker exec` 进容器 `ls`）正确显示中文文件名，避免被转义成 `$'\xxx'`。镜像已内置默认值，通常无需修改。
+
 ## API 接口
+
+所有接口在 `/api` 下。除认证接口外，均需登录后携带 Cookie（session）访问。
 
 ### 认证
 - `POST /api/auth/login` - 登录
 - `POST /api/auth/logout` - 登出
+- `POST /api/auth/change-password` - 修改密码
 - `GET /api/user` - 获取当前用户
 
 ### 任务管理
@@ -119,15 +130,58 @@ N_m3u8DL-RE_WEB_UI/
 - `GET /api/tasks/:id` - 获取任务详情
 - `DELETE /api/tasks/:id` - 删除任务
 - `GET /api/tasks/:id/log` - 获取任务日志
+- `POST /api/tasks/:id/save-as-profile` - 保存任务为下载方案
 
 ### 文件管理
 - `GET /api/files` - 获取文件列表
 - `GET /api/files/download` - 下载文件
 - `DELETE /api/files/:name` - 删除文件
 
+### 下载方案
+- `GET /api/profiles` - 方案列表
+- `POST /api/profiles` - 创建方案
+- `GET /api/profiles/:id` - 获取方案
+- `PUT /api/profiles/:id` - 更新方案
+- `DELETE /api/profiles/:id` - 删除方案
+- `GET /api/profiles/by-domain` - 按域名查询方案
+
+### 创建任务示例
+
+```bash
+# 1. 登录，保存 Cookie
+curl -c cookie.txt -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+# 2. 创建任务（携带 Cookie）
+curl -b cookie.txt -X POST http://localhost:8080/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/index.m3u8","output_name":"my-video","auto_select":true}'
+```
+
+主要请求参数：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| url | string | m3u8 链接（必填） |
+| output_name | string | 输出文件名 |
+| auto_select | bool | 自动选最佳视频+音频并合并为 mp4，**建议传 true** |
+| thread_count | int | 下载线程数，默认 32 |
+| retry_count | int | 重试次数，默认 15 |
+| headers | string | 自定义请求头，分号分隔 |
+| base_url | string | Base URL |
+| custom_proxy | string | 自定义代理 |
+| custom_args | string | 附加给 N_m3u8DL-RE 的自定义参数 |
+| concurrent_download | bool | 并行下载音视频 |
+| skip_segments_check | bool | 跳过分片数量完整性检测 |
+| key | string | 解密密钥 |
+| decryption_engine | string | 解密引擎，默认 MP4DECRYPT |
+
+> ⚠️ **重要**：API 创建任务时建议传 `"auto_select": true`。不传（默认 false）会导致多码率 m3u8 下载失败、且下载后视频音频不合并（无声音）。Web UI 已默认勾选，API 调用需自行带上。
+
 ## 二进制文件
 
-bin/ 目录需要准备以下文件：
+bin/ 目录需要准备以下文件（**Docker 部署会自动下载，无需手动准备**；仅源码部署需自行下载放到 bin/）：
 
 | 文件 | 说明 | 获取方式 |
 |------|------|----------|
@@ -136,3 +190,14 @@ bin/ 目录需要准备以下文件：
 | mp4decrypt | MP4 解密工具 | [Bento4](https://www.bok.net/Bento4/binaries/) |
 
 > 注意：bin/ 目录已添加到 .gitignore，不会被提交到版本控制。
+
+## 从源码构建
+
+如需自行构建镜像（定制或开发）：
+
+```bash
+git clone https://github.com/panoptes88/N_m3u8DL-RE-WEB-UI.git
+cd N_m3u8DL-RE-WEB-UI
+docker build -t m3u8dl .
+docker run -d --name m3u8dl -p 8080:8080 -v ./db:/app/db -v ./downloads:/app/downloads m3u8dl
+```

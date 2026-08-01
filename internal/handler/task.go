@@ -12,19 +12,21 @@ import (
 
 // CreateTaskRequest 创建任务请求
 type CreateTaskRequest struct {
-	URL              string `json:"url" binding:"required"`
-	OutputName       string `json:"output_name" binding:"required"`
-	ThreadCount      int    `json:"thread_count"`
-	RetryCount       int    `json:"retry_count"`
-	Headers          string `json:"headers"`
-	BaseURL          string `json:"base_url"`
-	DelAfterDone     bool   `json:"del_after_done"`
-	BinaryMerge      bool   `json:"binary_merge"`
-	AutoSelect       bool   `json:"auto_select"`
-	Key              string `json:"key"`
-	DecryptionEngine string `json:"decryption_engine"`
-	CustomArgs       string `json:"custom_args"`
-	CustomProxy      string `json:"custom_proxy"`
+	URL                string `json:"url" binding:"required"`
+	OutputName         string `json:"output_name" binding:"required"`
+	ThreadCount        int    `json:"thread_count"`
+	RetryCount         int    `json:"retry_count"`
+	Headers            string `json:"headers"`
+	BaseURL            string `json:"base_url"`
+	DelAfterDone       *bool  `json:"del_after_done"`
+	BinaryMerge        bool   `json:"binary_merge"`
+	AutoSelect         bool   `json:"auto_select"`
+	SkipSegmentsCheck  bool   `json:"skip_segments_check"`
+	ConcurrentDownload bool   `json:"concurrent_download"`
+	Key                string `json:"key"`
+	DecryptionEngine   string `json:"decryption_engine"`
+	CustomArgs         string `json:"custom_args"`
+	CustomProxy        string `json:"custom_proxy"`
 }
 
 func ListTasks(c *gin.Context) {
@@ -60,19 +62,21 @@ func CreateTask(c *gin.Context) {
 
 	// 转换为 service 层的请求类型
 	serviceReq := &service.CreateTaskRequest{
-		URL:              req.URL,
-		OutputName:       req.OutputName,
-		ThreadCount:      req.ThreadCount,
-		RetryCount:       req.RetryCount,
-		Headers:          req.Headers,
-		BaseURL:          req.BaseURL,
-		DelAfterDone:     req.DelAfterDone,
-		BinaryMerge:      req.BinaryMerge,
-		AutoSelect:       req.AutoSelect,
-		Key:              req.Key,
-		DecryptionEngine: req.DecryptionEngine,
-		CustomArgs:       req.CustomArgs,
-		CustomProxy:      req.CustomProxy,
+		URL:                req.URL,
+		OutputName:         req.OutputName,
+		ThreadCount:        req.ThreadCount,
+		RetryCount:         req.RetryCount,
+		Headers:            req.Headers,
+		BaseURL:            req.BaseURL,
+		DelAfterDone:       req.DelAfterDone,
+		BinaryMerge:        req.BinaryMerge,
+		AutoSelect:         req.AutoSelect,
+		SkipSegmentsCheck:  req.SkipSegmentsCheck,
+		ConcurrentDownload: req.ConcurrentDownload,
+		Key:                req.Key,
+		DecryptionEngine:   req.DecryptionEngine,
+		CustomArgs:         req.CustomArgs,
+		CustomProxy:        req.CustomProxy,
 	}
 
 	task, err := service.CreateTask(serviceReq)

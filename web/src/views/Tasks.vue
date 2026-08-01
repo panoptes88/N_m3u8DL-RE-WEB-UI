@@ -1,7 +1,9 @@
 <template>
   <div class="tasks-page">
+    <PageHeader title="下载任务" subtitle="创建任务并跟踪下载进度" />
+
     <!-- 创建任务表单 -->
-    <a-card title="创建下载任务">
+    <a-card title="创建下载任务" class="app-card">
       <template #extra>
         <a-space>
           <a-select
@@ -103,8 +105,25 @@
           </a-col>
         </a-row>
 
+        <a-row :gutter="16">
+          <a-col :xs="24" :sm="12" :md="8">
+            <a-form-item label=" " name="skipSegmentsCheck">
+              <a-checkbox v-model:checked="formState.skipSegmentsCheck">
+                跳过完整性检测
+              </a-checkbox>
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :sm="12" :md="8">
+            <a-form-item label=" " name="concurrentDownload">
+              <a-checkbox v-model:checked="formState.concurrentDownload">
+                并行下载音视频
+              </a-checkbox>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
         <!-- 解密选项 -->
-        <a-divider>解密选项</a-divider>
+        <div class="form-section-title">解密选项</div>
         <a-row :gutter="16">
           <a-col :xs="24" :sm="12" :md="8">
             <a-form-item label="解密密钥" name="key">
@@ -126,7 +145,7 @@
         </a-row>
 
         <!-- 代理设置 -->
-        <a-divider>代理设置</a-divider>
+        <div class="form-section-title">代理设置</div>
         <a-row :gutter="16">
           <a-col :xs="24" :sm="24" :md="12">
             <a-form-item label="自定义代理" name="customProxy">
@@ -139,7 +158,7 @@
         </a-row>
 
         <!-- 自定义参数 -->
-        <a-divider>其他参数</a-divider>
+        <div class="form-section-title">其他参数</div>
         <a-row :gutter="16">
           <a-col :span="24">
             <a-form-item label="自定义参数" name="customArgs">
@@ -151,7 +170,7 @@
           </a-col>
         </a-row>
 
-        <a-form-item>
+        <a-form-item style="margin-bottom: 0">
           <a-space>
             <a-button type="primary" size="large" :loading="creating" @click="handleCreate">
               创建任务
@@ -168,7 +187,7 @@
     </a-card>
 
     <!-- 任务列表 -->
-    <a-card title="下载任务" class="task-list">
+    <a-card title="下载任务" class="app-card task-list">
       <template #extra>
         <a-space>
           <a-select
@@ -197,29 +216,38 @@
         :scroll="{ x: 800 }"
       >
         <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'url'">
+            <a-tooltip :title="record.url" placement="topLeft">
+              <span class="copyable-text" @click="copyToClipboard(record.url)">{{ record.url }}</span>
+            </a-tooltip>
+          </template>
+          <template v-if="column.key === 'outputName'">
+            <a-tooltip :title="record.output_name" placement="topLeft">
+              <span class="copyable-text" @click="copyToClipboard(record.output_name)">{{ record.output_name }}</span>
+            </a-tooltip>
+          </template>
           <template v-if="column.key === 'status'">
-            <a-tag :color="getStatusColor(record.status)">
-              {{ getStatusText(record.status) }}
-            </a-tag>
+            <StatusTag :status="record.status" />
           </template>
           <template v-if="column.key === 'progress'">
             <a-progress
               :percent="record.progress"
               :status="record.status === 'failed' ? 'exception' : 'active'"
+              :stroke-color="record.status === 'failed' ? undefined : progressGradient"
             />
           </template>
           <template v-if="column.key === 'createdAt'">
             {{ formatTime(record.created_at) }}
           </template>
           <template v-if="column.key === 'action'">
-            <a-space>
-              <a-button size="small" @click="viewLog(record)">日志</a-button>
-              <a-button size="small" @click="saveAsProfile(record)">保存方案</a-button>
+            <a-space :size="4">
+              <a-button size="small" type="text" @click="viewLog(record)">日志</a-button>
+              <a-button size="small" type="text" @click="saveAsProfile(record)">保存方案</a-button>
               <a-popconfirm
                 title="确定删除此任务？"
                 @confirm="handleDelete(record.id)"
               >
-                <a-button size="small" danger>删除</a-button>
+                <a-button size="small" type="text" danger>删除</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -228,21 +256,7 @@
     </a-card>
 
     <!-- 日志弹窗 -->
-    <a-modal
-      v-model:open="logModalVisible"
-      title="任务日志"
-      :footer="null"
-      class="log-modal"
-    >
-      <a-spin :spinning="logLoading">
-        <a-textarea
-          v-model:value="logContent"
-          :rows="20"
-          readonly
-          style="font-family: monospace"
-        />
-      </a-spin>
-    </a-modal>
+    <TaskLogModal v-model:open="logModalVisible" :task-id="logTaskId" />
 
     <!-- 方案管理弹窗 -->
     <a-modal
@@ -277,14 +291,14 @@
             {{ formatDate(record.created_at) }}
           </template>
           <template v-if="column.key === 'action'">
-            <a-space>
-              <a-button size="small" @click="loadProfileToForm(record)">加载</a-button>
-              <a-button size="small" @click="viewProfileDetail(record)">详情</a-button>
+            <a-space :size="4">
+              <a-button size="small" type="text" @click="loadProfileToForm(record)">加载</a-button>
+              <a-button size="small" type="text" @click="viewProfileDetail(record)">详情</a-button>
               <a-popconfirm
                 title="确定删除此方案？"
                 @confirm="handleDeleteProfile(record.id)"
               >
-                <a-button size="small" danger>删除</a-button>
+                <a-button size="small" type="text" danger>删除</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -310,6 +324,8 @@
         <a-descriptions-item label="下载后删除临时文件">{{ currentProfile.del_after_done ? '是' : '否' }}</a-descriptions-item>
         <a-descriptions-item label="二进制合并">{{ currentProfile.binary_merge ? '是' : '否' }}</a-descriptions-item>
         <a-descriptions-item label="自动选择轨道">{{ currentProfile.auto_select ? '是' : '否' }}</a-descriptions-item>
+        <a-descriptions-item label="跳过完整性检测">{{ currentProfile.skip_segments_check ? '是' : '否' }}</a-descriptions-item>
+        <a-descriptions-item label="并行下载音视频">{{ currentProfile.concurrent_download ? '是' : '否' }}</a-descriptions-item>
         <a-descriptions-item label="解密引擎">{{ currentProfile.decryption_engine }}</a-descriptions-item>
         <a-descriptions-item label="自定义参数">{{ currentProfile.custom_args || '-' }}</a-descriptions-item>
         <a-descriptions-item label="自定义代理">{{ currentProfile.custom_proxy || '-' }}</a-descriptions-item>
@@ -320,7 +336,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { ReloadOutlined, SettingOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
@@ -328,6 +344,9 @@ import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore } from '../stores/task'
 import { useProfileStore } from '../stores/profile'
+import PageHeader from '../components/PageHeader.vue'
+import StatusTag from '../components/StatusTag.vue'
+import TaskLogModal from '../components/TaskLogModal.vue'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
@@ -340,14 +359,15 @@ const formRef = ref(null)
 const statusFilter = ref('')
 const keepFormAfterCreate = ref(false) // 创建后保留表单
 const logModalVisible = ref(false)
-const logLoading = ref(false)
-const logContent = ref('')
+const logTaskId = ref(null)
 const selectedProfileId = ref(null)
 const showProfileManager = ref(false)
 const showProfileDetail = ref(false)
 const currentProfile = ref(null)
 const editingProfileId = ref(null)
 const editingProfileName = ref('')
+
+const progressGradient = { from: '#6366f1', to: '#8b5cf6' }
 
 // 表单数据
 const formState = reactive({
@@ -359,7 +379,9 @@ const formState = reactive({
   baseUrl: '',
   delAfterDone: true,
   binaryMerge: false,
-  autoSelect: false,
+  autoSelect: true,
+  skipSegmentsCheck: false,
+  concurrentDownload: false,
   key: '',
   decryptionEngine: 'MP4DECRYPT',
   customArgs: '',
@@ -372,13 +394,13 @@ const formRules = {
 }
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 50 },
-  { title: 'URL', dataIndex: 'url', key: 'url', ellipsis: true, width: 200 },
-  { title: '输出', dataIndex: 'output_name', key: 'outputName', ellipsis: true, width: 80 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 70 },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 100 },
-  { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 130, responsive: ['lg'] },
-  { title: '操作', key: 'action', width: 150 }
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+  { title: 'URL', dataIndex: 'url', key: 'url', width: 200 },
+  { title: '输出', dataIndex: 'output_name', key: 'outputName', width: 100 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 120 },
+  { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 150, responsive: ['lg'] },
+  { title: '操作', key: 'action', width: 170 }
 ]
 
 const profileColumns = [
@@ -388,28 +410,6 @@ const profileColumns = [
   { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 100 },
   { title: '操作', key: 'action', width: 150 }
 ]
-
-function getStatusColor(status) {
-  const colors = {
-    pending: 'orange',
-    downloading: 'blue',
-    completed: 'green',
-    failed: 'red',
-    interrupted: 'gold'
-  }
-  return colors[status] || 'default'
-}
-
-function getStatusText(status) {
-  const texts = {
-    pending: '等待中',
-    downloading: '下载中',
-    completed: '已完成',
-    failed: '下载失败',
-    interrupted: '已中断'
-  }
-  return texts[status] || status
-}
 
 function formatTime(time) {
   return dayjs(time).format('YYYY-MM-DD HH:mm:ss')
@@ -461,7 +461,9 @@ function resetForm() {
   formState.baseUrl = ''
   formState.delAfterDone = true
   formState.binaryMerge = false
-  formState.autoSelect = false
+  formState.autoSelect = true
+  formState.skipSegmentsCheck = false
+  formState.concurrentDownload = false
   formState.key = ''
   formState.decryptionEngine = 'MP4DECRYPT'
   formState.customArgs = ''
@@ -489,6 +491,8 @@ async function handleCreate() {
       del_after_done: formState.delAfterDone,
       binary_merge: formState.binaryMerge,
       auto_select: formState.autoSelect,
+      skip_segments_check: formState.skipSegmentsCheck,
+      concurrent_download: formState.concurrentDownload,
       key: formState.key,
       decryption_engine: formState.decryptionEngine,
       custom_args: formState.customArgs,
@@ -517,6 +521,33 @@ async function handleDelete(id) {
   }
 }
 
+// 点击复制到粘贴板（URL、输出文件名）
+// 优先用 Clipboard API（需安全上下文：HTTPS 或 localhost），不可用时回退到 execCommand（兼容 http://IP 访问）
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text)
+      message.success('已复制到粘贴板')
+      return
+    }
+  } catch {
+    // 忽略，回退到 execCommand
+  }
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    message.success('已复制到粘贴板')
+  } catch {
+    message.error('复制失败')
+  }
+}
+
 // 保存任务为方案
 async function saveAsProfile(task) {
   try {
@@ -537,7 +568,9 @@ function handleProfileChange(profileId) {
     formState.baseUrl = ''
     formState.delAfterDone = true
     formState.binaryMerge = false
-    formState.autoSelect = false
+    formState.autoSelect = true
+    formState.skipSegmentsCheck = false
+    formState.concurrentDownload = false
     formState.decryptionEngine = 'MP4DECRYPT'
     formState.customArgs = ''
     formState.customProxy = ''
@@ -553,6 +586,8 @@ function handleProfileChange(profileId) {
     formState.delAfterDone = profile.del_after_done
     formState.binaryMerge = profile.binary_merge
     formState.autoSelect = profile.auto_select
+    formState.skipSegmentsCheck = profile.skip_segments_check || false
+    formState.concurrentDownload = profile.concurrent_download || false
     formState.decryptionEngine = profile.decryption_engine
     formState.customArgs = profile.custom_args || ''
     formState.customProxy = profile.custom_proxy || ''
@@ -580,19 +615,9 @@ async function handleDeleteProfile(id) {
   }
 }
 
-async function viewLog(task) {
+function viewLog(task) {
+  logTaskId.value = task.id
   logModalVisible.value = true
-  logLoading.value = true
-  logContent.value = ''
-
-  try {
-    const res = await taskStore.getTaskLog(task.id)
-    logContent.value = res.log || '暂无日志'
-  } catch {
-    message.error('获取日志失败')
-  } finally {
-    logLoading.value = false
-  }
 }
 
 onMounted(() => {
@@ -600,11 +625,6 @@ onMounted(() => {
   taskStore.startPolling()
   // 加载下载方案列表
   profileStore.fetchProfiles()
-})
-
-onUnmounted(() => {
-  // 不停止轮询，因为 Dashboard 页面可能还在使用
-  // 轮询由 store 统一管理
 })
 </script>
 
@@ -619,17 +639,17 @@ onUnmounted(() => {
   flex: 1;
 }
 
-.log-modal {
-  max-width: calc(100vw - 32px);
+.copyable-text {
+  cursor: pointer;
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 
-.log-modal :deep(.ant-modal-body) {
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.log-modal :deep(.ant-modal-content) {
-  max-width: 800px;
-  margin: 0 auto;
+.copyable-text:hover {
+  color: var(--brand);
 }
 </style>

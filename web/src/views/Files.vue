@@ -1,6 +1,12 @@
 <template>
   <div class="files-page">
     <PageHeader title="文件管理" subtitle="浏览、播放与下载已完成的文件">
+      <a-input
+        v-model:value="searchKeyword"
+        placeholder="搜索文件名"
+        allow-clear
+        style="width: 200px"
+      />
       <a-button @click="fetchFiles">
         <template #icon><ReloadOutlined /></template>
         刷新
@@ -19,7 +25,7 @@
 
       <a-table
         :columns="columns"
-        :data-source="files"
+        :data-source="filteredFiles"
         :pagination="paginationConfig"
         :loading="loading"
         :row-selection="rowSelection"
@@ -32,7 +38,9 @@
             <a-space :size="8">
               <PlayCircleOutlined v-if="isVideoFile(record.name)" class="play-icon" @click="playVideo(record)" />
               <FileOutlined v-else class="file-icon" />
-              <span class="file-name">{{ record.name }}</span>
+              <a-tooltip :title="record.name">
+                <span class="file-name copyable-text" @click="copyToClipboard(record.name)">{{ record.name }}</span>
+              </a-tooltip>
             </a-space>
           </template>
           <template v-if="column.key === 'size'">
@@ -84,11 +92,19 @@ import PageHeader from '../components/PageHeader.vue'
 
 const loading = ref(false)
 const files = ref([])
+const searchKeyword = ref('')
 const videoModalVisible = ref(false)
 const currentVideoName = ref('')
 const currentVideoUrl = ref('')
 const selectedRowKeys = ref([])
 const pageSize = ref(10)
+
+// 按文件名搜索过滤
+const filteredFiles = computed(() => {
+  const kw = searchKeyword.value.trim().toLowerCase()
+  if (!kw) return files.value
+  return files.value.filter(f => f.name.toLowerCase().includes(kw))
+})
 
 // 西瓜播放器实例
 let xgPlayer = null
@@ -169,6 +185,32 @@ function downloadFile(name) {
   window.open(`/api/files/download?name=${encodeURIComponent(name)}`, '_blank')
 }
 
+// 点击复制到粘贴板
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text)
+      message.success('已复制到粘贴板')
+      return
+    }
+  } catch {
+    // 忽略，回退
+  }
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    message.success('已复制到粘贴板')
+  } catch {
+    message.error('复制失败')
+  }
+}
+
 async function playVideo(record) {
   currentVideoName.value = record.name
   currentVideoUrl.value = `/api/files/download?name=${encodeURIComponent(record.name)}`
@@ -180,6 +222,63 @@ async function playVideo(record) {
   // 等待 DOM 更新后初始化播放器
   await nextTick()
   initXgPlayer(currentVideoUrl.value, record.name)
+  // 尝试加载同名字幕
+  loadSubtitle(record.name)
+}
+
+// SRT 字幕转 VTT
+function srtToVtt(srt) {
+  return 'WEBVTT\n\n' + srt
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+}
+
+// 加载同名字幕（.srt/.vtt），用 HTML5 track 原生渲染
+async function loadSubtitle(videoName) {
+  const baseName = videoName.replace(/\.[^.]+$/, '')
+  // 匹配同名字幕：video.mp4 -> video.srt / video.en.srt / video.zh.srt 等
+  const subFiles = files.value.filter(f =>
+    f.name.startsWith(baseName + '.') && /\.(srt|vtt)$/i.test(f.name)
+  )
+  // 优先中/英文字幕，否则取第一个
+  const subFile = subFiles.find(f => /\.(zh|en)\./i.test(f.name)) || subFiles[0]
+  if (!subFile) return
+
+  try {
+    const subUrl = `/api/files/download?name=${encodeURIComponent(subFile.name)}`
+    const res = await fetch(subUrl)
+    let text = await res.text()
+    if (/\.srt$/i.test(subFile.name)) {
+      text = srtToVtt(text)
+    }
+    // 用 HTML5 <track> 加载字幕，浏览器原生渲染
+    const blob = new Blob([text], { type: 'text/vtt' })
+    const vttUrl = URL.createObjectURL(blob)
+    const video = document.querySelector('#xgplayer-container video')
+    if (!video) {
+      console.warn('[字幕] 未找到 video 元素')
+      return
+    }
+    // 清除旧 track
+    video.querySelectorAll('track').forEach(t => t.remove())
+    const track = document.createElement('track')
+    track.kind = 'subtitles'
+    track.label = '字幕'
+    track.srclang = 'zh'
+    track.src = vttUrl
+    track.default = true
+    video.appendChild(track)
+    // 字幕加载后开启显示
+    track.addEventListener('load', () => {
+      if (video.textTracks && video.textTracks.length > 0) {
+        video.textTracks[0].mode = 'showing'
+      }
+    })
+  } catch (err) {
+    console.error('字幕加载失败:', err)
+    message.warning('字幕加载失败，请查看控制台')
+  }
 }
 
 function initXgPlayer(url, title = '') {
@@ -189,24 +288,50 @@ function initXgPlayer(url, title = '') {
     xgPlayer = null
   }
 
+  const savedVolume = parseFloat(localStorage.getItem('xg_volume') || '1')
   xgPlayer = new Player({
     id: 'xgplayer-container',
     url: url,
     playbackRate: [0.5, 0.75, 1, 1.25, 1.5, 2],
     defaultPlaybackRate: 1,
     fluid: true,
+    volume: savedVolume,
     maxVolume: 1,
     ignores: ['quality'],
-    closeVideoClick: true,
+    closeVideoClick: false,
     title: title,
     error: () => {
       message.error('视频加载失败，请检查文件是否完整')
     }
   })
+
+  // 音量记忆：变化时保存
+  xgPlayer.on('volumechange', () => {
+    localStorage.setItem('xg_volume', String(xgPlayer.volume))
+  })
+
+  // 播放进度记忆：恢复上次播放位置
+  const progressKey = `xg_progress_${title}`
+  const savedTime = parseFloat(localStorage.getItem(progressKey) || '0')
+  if (savedTime > 0) {
+    xgPlayer.once('canplay', () => {
+      xgPlayer.currentTime = savedTime
+    })
+  }
+  xgPlayer.on('timeupdate', () => {
+    localStorage.setItem(progressKey, String(xgPlayer.currentTime))
+  })
+  xgPlayer.on('ended', () => {
+    localStorage.removeItem(progressKey)
+  })
 }
 
 function closeVideo() {
   if (xgPlayer) {
+    // 关闭前保存最后进度
+    if (currentVideoName.value && xgPlayer.currentTime > 0) {
+      localStorage.setItem(`xg_progress_${currentVideoName.value}`, String(xgPlayer.currentTime))
+    }
     xgPlayer.destroy()
     xgPlayer = null
   }
@@ -334,6 +459,20 @@ onMounted(() => {
 
 .file-name {
   color: var(--text-1);
+}
+
+.copyable-text {
+  cursor: pointer;
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.copyable-text:hover {
+  color: var(--brand);
 }
 
 .video-wrapper {

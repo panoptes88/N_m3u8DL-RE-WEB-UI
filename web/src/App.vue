@@ -16,7 +16,7 @@
           >
             <BrandLogo :collapsed="appStore.collapsed" class="sider-logo" />
             <a-menu
-              v-model:selectedKeys="selectedKeys"
+              :selectedKeys="selectedKeys"
               mode="inline"
               :items="menuItems"
               @click="handleMenuClick"
@@ -102,7 +102,7 @@
         >
           <BrandLogo class="sider-logo" />
           <a-menu
-            v-model:selectedKeys="selectedKeys"
+            :selectedKeys="selectedKeys"
             mode="inline"
             :items="menuItems"
             @click="handleMobileMenuClick"
@@ -136,7 +136,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted, h } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from './stores/user'
@@ -162,7 +162,6 @@ const route = useRoute()
 const userStore = useUserStore()
 const appStore = useAppStore()
 
-const selectedKeys = ref(['dashboard'])
 const mobileMenuVisible = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
 
@@ -198,15 +197,17 @@ const menuItems = [
 ]
 
 // 菜单选中态跟随路由（刷新、前进后退、直输 URL 时保持同步）
-watch(
-  () => route.name,
-  (name) => {
-    if (typeof name === 'string' && menuItems.some(item => item.key === name.toLowerCase())) {
-      selectedKeys.value = [name.toLowerCase()]
+// 用 computed 单向跟随 route.name，避免硬编码初始值导致刷新时高亮先落在"首页"再跳转
+const selectedKeys = computed(() => {
+  const name = route.name
+  if (typeof name === 'string') {
+    const key = name.toLowerCase()
+    if (menuItems.some(item => item.key === key)) {
+      return [key]
     }
-  },
-  { immediate: true }
-)
+  }
+  return []
+})
 
 function handleMenuClick({ key }) {
   router.push({ name: key.charAt(0).toUpperCase() + key.slice(1) })

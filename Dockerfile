@@ -88,5 +88,6 @@ ENV PORT=8080
 ENV DOWNLOAD_DIR=/app/downloads
 ENV BIN_DIR=/app/bin
 ENV DB_PATH=/app/db/data.db
+ENV LANG=C.UTF-8
 
 CMD ["./server"]

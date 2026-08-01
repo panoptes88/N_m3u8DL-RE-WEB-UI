@@ -395,7 +395,7 @@ const formRules = {
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-  { title: 'URL', dataIndex: 'url', key: 'url', width: 200 },
+  { title: 'URL', dataIndex: 'url', key: 'url', width: 200, ellipsis: true },
   { title: '输出', dataIndex: 'output_name', key: 'outputName', width: 100 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
   { title: '进度', dataIndex: 'progress', key: 'progress', width: 120 },

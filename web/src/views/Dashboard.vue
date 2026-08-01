@@ -129,7 +129,7 @@ const progressGradient = { from: '#6366f1', to: '#8b5cf6' }
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-  { title: 'URL', dataIndex: 'url', key: 'url', ellipsis: true },
+  { title: 'URL', dataIndex: 'url', key: 'url', width: 200, ellipsis: true },
   { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
   { title: '进度', dataIndex: 'progress', key: 'progress', width: 130 },
   { title: '操作', key: 'action', width: 120 }

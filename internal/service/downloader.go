@@ -178,17 +178,33 @@ func GetTaskLog(id uint) (string, error) {
 		return "", nil
 	}
 
-	// 日志可能很大，只读取末尾部分
-	content, truncated, err := readLogTail(task.LogFile, 256*1024)
+	const headLines = 50
+	const tailLines = 100
+	const totalLimit = headLines + tailLines // 超过此行数则截断
+
+	// 读开头 totalLimit+1 行，判断是否需要截断
+	headAll, err := readLogHeadLines(task.LogFile, totalLimit+1)
 	if err != nil {
 		return "", err
 	}
-	content = normalizeLogContent(content)
-	if truncated {
-		content = "……（日志过长，仅显示末尾部分）……\n\n" + content
+	allLines := strings.Split(headAll, "\n")
+
+	// 日志 <= totalLimit 行：全量返回
+	if len(allLines) <= totalLimit {
+		return cleanANSI(headAll), nil
 	}
 
-	return content, nil
+	// 日志 > totalLimit 行：开头 headLines 行 + 省略提示 + 末尾 tailLines 行
+	head := strings.Join(allLines[:headLines], "\n")
+	tail, err := readLogTailLines(task.LogFile, tailLines)
+	if err != nil {
+		return "", err
+	}
+	content := head +
+		"\n……（日志过长，中间部分已省略，仅显示开头 " + strconv.Itoa(headLines) +
+		" 行和末尾 " + strconv.Itoa(tailLines) + " 行）……\n\n" +
+		tail
+	return cleanANSI(content), nil
 }
 
 func ListFiles(downloadDir string) ([]map[string]interface{}, error) {
@@ -388,9 +404,9 @@ func buildCommandArgs(task *model.Task, cfg *config.Config) []string {
 		args = append(args, "--binary-merge")
 	}
 
-	// 自动选择最佳轨道
+	// 自动选择最佳视频和音频轨道（不选字幕，避免字幕 mux 进 mp4 失败；显式选流也避免多码率 master playlist 弹交互菜单）
 	if task.AutoSelect {
-		args = append(args, "--auto-select")
+		args = append(args, "-sv", "best", "-sa", "best")
 	}
 
 	// 分片数量完整性检测（默认开启，勾选跳过后显式传 False）
@@ -398,10 +414,12 @@ func buildCommandArgs(task *model.Task, cfg *config.Config) []string {
 		args = append(args, "--check-segments-count", "False")
 	}
 
-	// 并行下载音视频（-mt），并在完成后混流为 mp4
+	// 并行下载音视频（-mt）
 	if task.ConcurrentDownload {
-		args = append(args, "-mt", "-M", "format=mp4")
+		args = append(args, "-mt")
 	}
+	// 下载完成后混流为 mp4（合并视频+音频，避免分离导致无声音）
+	args = append(args, "-M", "format=mp4")
 
 	// 解密
 	if task.Key != "" {
@@ -684,6 +702,73 @@ func readLogTail(path string, maxBytes int64) (string, bool, error) {
 		}
 	}
 	return string(buf), truncated, nil
+}
+
+// readLogHeadLines 读取日志文件开头的 maxLines 行。
+// 先读取开头 64KB（足够覆盖前 50 行），再用 normalizeLogContent 按行切分，
+// 兼容 v0.5（有换行）与 v0.6+（重定向无换行）两种日志格式。
+func readLogHeadLines(path string, maxLines int) (string, error) {
+	const headBytes = 128 * 1024
+
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	size := int64(headBytes)
+	if info.Size() < size {
+		size = info.Size()
+	}
+	buf := make([]byte, size)
+	if _, err := f.Read(buf); err != nil && err != io.EOF {
+		return "", err
+	}
+
+	lines := strings.Split(normalizeLogContent(string(buf)), "\n")
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// readLogTailLines 读取日志文件末尾的 maxLines 行。
+// 先读取末尾 128KB（足够覆盖最后 100 行），再用 normalizeLogContent 按行切分，
+// 兼容 v0.5（有换行）与 v0.6+（重定向无换行）两种日志格式。
+func readLogTailLines(path string, maxLines int) (string, error) {
+	const tailBytes = 128 * 1024
+
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	size := int64(tailBytes)
+	if info.Size() < size {
+		size = info.Size()
+	}
+	buf := make([]byte, size)
+	offset := info.Size() - size
+	if _, err := f.ReadAt(buf, offset); err != nil && err != io.EOF {
+		return "", err
+	}
+
+	lines := strings.Split(normalizeLogContent(string(buf)), "\n")
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 var (

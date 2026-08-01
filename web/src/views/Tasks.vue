@@ -216,6 +216,16 @@
         :scroll="{ x: 800 }"
       >
         <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'url'">
+            <a-tooltip :title="record.url" placement="topLeft">
+              <span class="copyable-text" @click="copyToClipboard(record.url)">{{ record.url }}</span>
+            </a-tooltip>
+          </template>
+          <template v-if="column.key === 'outputName'">
+            <a-tooltip :title="record.output_name" placement="topLeft">
+              <span class="copyable-text" @click="copyToClipboard(record.output_name)">{{ record.output_name }}</span>
+            </a-tooltip>
+          </template>
           <template v-if="column.key === 'status'">
             <StatusTag :status="record.status" />
           </template>
@@ -369,7 +379,7 @@ const formState = reactive({
   baseUrl: '',
   delAfterDone: true,
   binaryMerge: false,
-  autoSelect: false,
+  autoSelect: true,
   skipSegmentsCheck: false,
   concurrentDownload: false,
   key: '',
@@ -385,8 +395,8 @@ const formRules = {
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-  { title: 'URL', dataIndex: 'url', key: 'url', ellipsis: true, width: 200 },
-  { title: '输出', dataIndex: 'output_name', key: 'outputName', ellipsis: true, width: 100 },
+  { title: 'URL', dataIndex: 'url', key: 'url', width: 200 },
+  { title: '输出', dataIndex: 'output_name', key: 'outputName', width: 100 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
   { title: '进度', dataIndex: 'progress', key: 'progress', width: 120 },
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 150, responsive: ['lg'] },
@@ -451,7 +461,7 @@ function resetForm() {
   formState.baseUrl = ''
   formState.delAfterDone = true
   formState.binaryMerge = false
-  formState.autoSelect = false
+  formState.autoSelect = true
   formState.skipSegmentsCheck = false
   formState.concurrentDownload = false
   formState.key = ''
@@ -511,6 +521,33 @@ async function handleDelete(id) {
   }
 }
 
+// 点击复制到粘贴板（URL、输出文件名）
+// 优先用 Clipboard API（需安全上下文：HTTPS 或 localhost），不可用时回退到 execCommand（兼容 http://IP 访问）
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text)
+      message.success('已复制到粘贴板')
+      return
+    }
+  } catch {
+    // 忽略，回退到 execCommand
+  }
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    message.success('已复制到粘贴板')
+  } catch {
+    message.error('复制失败')
+  }
+}
+
 // 保存任务为方案
 async function saveAsProfile(task) {
   try {
@@ -531,7 +568,7 @@ function handleProfileChange(profileId) {
     formState.baseUrl = ''
     formState.delAfterDone = true
     formState.binaryMerge = false
-    formState.autoSelect = false
+    formState.autoSelect = true
     formState.skipSegmentsCheck = false
     formState.concurrentDownload = false
     formState.decryptionEngine = 'MP4DECRYPT'
@@ -600,5 +637,19 @@ onMounted(() => {
 
 .task-list {
   flex: 1;
+}
+
+.copyable-text {
+  cursor: pointer;
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.copyable-text:hover {
+  color: var(--brand);
 }
 </style>

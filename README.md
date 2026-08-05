@@ -13,6 +13,14 @@
 - URL / 输出文件名点击复制
 - Docker 容器化部署
 
+## 推荐配合使用
+
+**[m3u8dl-browser-extension](https://github.com/panoptes88/m3u8dl-browser-extension)** — Chrome 视频嗅探插件
+
+自动嗅探网页中的 m3u8、mp4、mpd 等媒体资源，支持一键发送到本项目进行远程下载，省去手动复制链接的步骤。
+
+> 扩展本身只负责「嗅探 + 转发链接」，不下载视频；实际下载由本项目服务器完成。
+
 ## 界面预览
 
 | 首页 | 下载任务 | 文件管理 |

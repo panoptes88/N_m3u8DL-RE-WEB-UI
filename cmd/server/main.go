@@ -80,8 +80,12 @@ func main() {
 			// 任务管理
 			protected.GET("/tasks", handler.ListTasks)
 			protected.POST("/tasks", handler.CreateTask)
+			// 批量删除用 DELETE /tasks + JSON body，避免与 /tasks/:id 的路由冲突
+			protected.DELETE("/tasks", handler.BatchDeleteTasks)
 			protected.GET("/tasks/:id", handler.GetTask)
 			protected.DELETE("/tasks/:id", handler.DeleteTask)
+			protected.POST("/tasks/:id/cancel", handler.CancelTask)
+			protected.POST("/tasks/:id/retry", handler.RetryTask)
 			protected.GET("/tasks/:id/log", handler.GetTaskLog)
 
 			// 文件管理

@@ -78,6 +78,41 @@ export const useTaskStore = defineStore('task', () => {
     tasks.value = tasks.value.filter(t => t.id !== id)
   }
 
+  // 取消正在进行的任务（记录保留，可再次重试）
+  async function cancelTask(id) {
+    const updated = await post(`/tasks/${id}/cancel`)
+    replaceTask(updated)
+    return updated
+  }
+
+  // 重试失败/中断的任务
+  async function retryTask(id) {
+    const updated = await post(`/tasks/${id}/retry`)
+    replaceTask(updated)
+    return updated
+  }
+
+  // 批量删除：本地先移除，再用服务端结果兜底刷新
+  async function deleteTasks(ids) {
+    const res = await del('/tasks', { ids })
+    const deleted = new Set(res?.deleted || [])
+    if (deleted.size > 0) {
+      tasks.value = tasks.value.filter(t => !deleted.has(t.id))
+    }
+    if (res?.failed?.length) {
+      fetchTasks()
+    }
+    return res
+  }
+
+  function replaceTask(updated) {
+    if (!updated || updated.id == null) return
+    const index = tasks.value.findIndex(t => t.id === updated.id)
+    if (index !== -1) {
+      tasks.value[index] = updated
+    }
+  }
+
   async function getTaskProgress(id) {
     return await get(`/tasks/${id}`)
   }
@@ -97,6 +132,9 @@ export const useTaskStore = defineStore('task', () => {
     stopPolling,
     createTask,
     deleteTask,
+    cancelTask,
+    retryTask,
+    deleteTasks,
     getTaskProgress,
     getTaskLog
   }

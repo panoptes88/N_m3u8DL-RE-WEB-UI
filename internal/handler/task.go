@@ -121,6 +121,61 @@ func DeleteTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
 
+// CancelTask 取消正在进行中的任务（保留记录与参数，便于重试）
+func CancelTask(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务ID"})
+		return
+	}
+
+	task, err := service.CancelTask(uint(id))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, task)
+}
+
+// RetryTask 重试失败/中断的任务：重置为等待中，由轮询重新开始下载
+func RetryTask(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务ID"})
+		return
+	}
+
+	task, err := service.RetryTask(uint(id))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, task)
+}
+
+type BatchDeleteTasksRequest struct {
+	IDs []uint `json:"ids" binding:"required,min=1"`
+}
+
+// BatchDeleteTasks 批量删除任务。
+// 使用 DELETE /tasks + JSON body，避免与 /tasks/:id 产生路由冲突。
+func BatchDeleteTasks(c *gin.Context) {
+	var req BatchDeleteTasksRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误: " + err.Error()})
+		return
+	}
+
+	deleted, failed := service.DeleteTasks(req.IDs)
+
+	c.JSON(http.StatusOK, gin.H{
+		"deleted": deleted,
+		"failed":  failed,
+	})
+}
+
 func GetTaskLog(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {

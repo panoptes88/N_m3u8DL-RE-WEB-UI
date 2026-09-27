@@ -59,7 +59,7 @@
           <a-collapse-panel key="advanced">
             <template #header>
               <span class="advanced-header">
-                高级设置
+                <span class="advanced-title">高级设置</span>
                 <span class="advanced-hint">线程 / 请求头 / 解密 / 代理 / 自定义参数</span>
               </span>
             </template>
@@ -200,13 +200,87 @@
         </a-space>
       </template>
 
+      <!-- 批量操作条 -->
+      <transition name="fade">
+        <div v-if="selectedRowKeys.length > 0" class="batch-bar">
+          <span class="batch-info">已选择 {{ selectedRowKeys.length }} 个任务</span>
+          <a-space :size="8">
+            <a-button size="small" @click="selectedRowKeys = []">取消选择</a-button>
+            <a-popconfirm
+              title="确定删除选中的任务？（下载中的任务会先被终止）"
+              @confirm="batchDelete"
+            >
+              <a-button size="small" type="primary" danger>批量删除</a-button>
+            </a-popconfirm>
+          </a-space>
+        </div>
+      </transition>
+
+      <!-- 移动端：表格在窄屏不可用，改用卡片列表 -->
+      <div v-if="isMobile" class="task-cards">
+        <a-empty
+          v-if="taskStore.tasks.length === 0"
+          :description="taskStore.statusFilter ? '当前筛选条件下没有任务' : '还没有任务，先在上方创建一个吧'"
+        />
+        <div
+          v-for="record in taskStore.tasks"
+          :key="record.id"
+          class="task-card"
+          :class="rowClassName(record)"
+        >
+          <div class="task-card-head">
+            <TaskCell
+              class="task-card-title"
+              :output-name="record.output_name"
+              :url="record.url"
+              @copy="copyToClipboard"
+            />
+            <StatusTag :status="record.status" />
+          </div>
+          <div class="progress-cell">
+            <a-progress
+              :percent="record.progress"
+              :status="isErrorStatus(record.status) ? 'exception' : 'active'"
+              :stroke-color="isErrorStatus(record.status) ? undefined : progressGradient"
+              :show-info="false"
+              size="small"
+            />
+            <div class="progress-meta">
+              <span class="progress-percent">{{ record.progress }}%</span>
+              <span v-if="progressMeta(record)" class="progress-detail">{{ progressMeta(record) }}</span>
+            </div>
+          </div>
+          <div v-if="record.error_msg" class="task-card-error">
+            <ExclamationCircleOutlined />
+            <span>{{ record.error_msg }}</span>
+          </div>
+          <div class="task-card-foot">
+            <span class="task-card-meta">
+              #{{ record.id }} · 耗时 {{ formatDuration(record) }}
+            </span>
+            <TaskActions
+              :task="record"
+              show-save-profile
+              @log="viewLog"
+              @cancel="handleCancel"
+              @retry="handleRetry"
+              @save-profile="saveAsProfile"
+              @delete="handleDelete(record.id)"
+            />
+          </div>
+        </div>
+      </div>
+
       <a-table
+        v-else
         :columns="columns"
         :data-source="taskStore.tasks"
         :pagination="{ pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }"
         :loading="taskStore.loading"
         :scroll="{ x: 886 }"
         :row-class-name="rowClassName"
+        :row-selection="rowSelection"
+        :row-key="record => record.id"
         :sticky="{ offsetHeader: 60 }"
       >
         <template #bodyCell="{ column, record }">
@@ -247,16 +321,15 @@
             {{ formatTime(record.created_at) }}
           </template>
           <template v-if="column.key === 'action'">
-            <a-space :size="4">
-              <a-button size="small" type="text" @click="viewLog(record)">日志</a-button>
-              <a-button size="small" type="text" @click="saveAsProfile(record)">保存方案</a-button>
-              <a-popconfirm
-                title="确定删除此任务？"
-                @confirm="handleDelete(record.id)"
-              >
-                <a-button size="small" type="text" danger>删除</a-button>
-              </a-popconfirm>
-            </a-space>
+            <TaskActions
+              :task="record"
+              show-save-profile
+              @log="viewLog"
+              @cancel="handleCancel"
+              @retry="handleRetry"
+              @save-profile="saveAsProfile"
+              @delete="handleDelete(record.id)"
+            />
           </template>
         </template>
         <template #emptyText>
@@ -270,7 +343,11 @@
     </a-card>
 
     <!-- 日志弹窗 -->
-    <TaskLogModal v-model:open="logModalVisible" :task-id="logTaskId" />
+    <TaskLogModal
+      v-model:open="logModalVisible"
+      :task-id="logTaskId"
+      :status="logTaskStatus"
+    />
 
     <!-- 方案管理弹窗 -->
     <a-modal
@@ -350,7 +427,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -364,8 +441,10 @@ import { useTaskStore } from '../stores/task'
 import { useProfileStore } from '../stores/profile'
 import { formatDuration, progressMeta, isErrorStatus } from '../utils/task'
 import { copyToClipboard } from '../utils/clipboard'
+import { useIsMobile } from '../composables/useIsMobile'
 import PageHeader from '../components/PageHeader.vue'
 import StatusTag from '../components/StatusTag.vue'
+import TaskActions from '../components/TaskActions.vue'
 import TaskCell from '../components/TaskCell.vue'
 import TaskLogModal from '../components/TaskLogModal.vue'
 
@@ -388,6 +467,22 @@ const showProfileDetail = ref(false)
 const currentProfile = ref(null)
 const editingProfileId = ref(null)
 const editingProfileName = ref('')
+const selectedRowKeys = ref([])
+
+// 窄屏改用卡片列表（表格横向滚动在手机上不可用）
+const { isMobile } = useIsMobile()
+
+// 打开中的日志对应的任务状态：随轮询更新，用于决定是否持续刷新日志
+const logTaskStatus = computed(
+  () => taskStore.tasks.find(t => t.id === logTaskId.value)?.status || ''
+)
+
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  onChange: keys => {
+    selectedRowKeys.value = keys
+  }
+}))
 
 const progressGradient = { from: '#6366f1', to: '#8b5cf6' }
 
@@ -533,9 +628,47 @@ async function handleCreate() {
 async function handleDelete(id) {
   try {
     await taskStore.deleteTask(id)
+    selectedRowKeys.value = selectedRowKeys.value.filter(k => k !== id)
     message.success('删除成功')
   } catch {
     message.error('删除失败')
+  }
+}
+
+// 取消正在进行的任务（记录保留，可再次重试）
+async function handleCancel(task) {
+  try {
+    await taskStore.cancelTask(task.id)
+    message.success('已取消任务')
+  } catch (err) {
+    message.error(err.response?.data?.error || '取消失败')
+  }
+}
+
+// 重试已结束的任务
+async function handleRetry(task) {
+  try {
+    await taskStore.retryTask(task.id)
+    message.success('已加入下载队列')
+  } catch (err) {
+    message.error(err.response?.data?.error || '重试失败')
+  }
+}
+
+// 批量删除选中任务
+async function batchDelete() {
+  const ids = [...selectedRowKeys.value]
+  if (ids.length === 0) return
+
+  try {
+    const res = await taskStore.deleteTasks(ids)
+    const deleted = res?.deleted?.length || 0
+    const failed = res?.failed?.length || 0
+    if (deleted > 0) message.success(`已删除 ${deleted} 个任务`)
+    if (failed > 0) message.warning(`${failed} 个任务删除失败`)
+    selectedRowKeys.value = []
+  } catch (err) {
+    message.error(err.response?.data?.error || '批量删除失败')
   }
 }
 
@@ -649,6 +782,103 @@ onUnmounted(() => {
   flex: 1;
 }
 
+/* 批量操作条 */
+.batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.batch-info {
+  font-size: 13px;
+  color: var(--text-1);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ===== 移动端卡片列表 ===== */
+.task-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.task-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.task-card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-card-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  word-break: break-all;
+}
+
+.task-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.task-card-meta {
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 卡片上的失败/中断配色与表格保持一致 */
+.task-card.row-failed {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.task-card.row-interrupted {
+  background: rgba(249, 115, 22, 0.06);
+  border-color: rgba(249, 115, 22, 0.28);
+}
+
 /* 高级设置折叠面板：去掉边框，让视觉更轻 */
 .advanced-collapse {
   margin: 4px 0 16px;
@@ -670,6 +900,11 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
+  min-width: 0;
+}
+
+.advanced-title {
+  white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-1);
@@ -679,6 +914,16 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 400;
   color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 窄屏放不下提示语，只保留标题 */
+@media (max-width: 576px) {
+  .advanced-hint {
+    display: none;
+  }
 }
 
 /* 复选框网格：替代此前用 label=" " 撑位的写法，间距与对齐更稳定 */

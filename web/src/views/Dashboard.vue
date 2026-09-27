@@ -123,21 +123,13 @@
             {{ formatDuration(record) }}
           </template>
           <template v-if="column.key === 'action'">
-            <a-space :size="4">
-              <a-button
-                size="small"
-                type="text"
-                @click="viewLog(record)"
-              >
-                日志
-              </a-button>
-              <a-popconfirm
-                title="确定删除此任务？"
-                @confirm="deleteTask(record.id)"
-              >
-                <a-button size="small" type="text" danger>删除</a-button>
-              </a-popconfirm>
-            </a-space>
+            <TaskActions
+              :task="record"
+              @log="viewLog"
+              @cancel="handleCancel"
+              @retry="handleRetry"
+              @delete="deleteTask(record.id)"
+            />
           </template>
         </template>
         <template #emptyText>
@@ -146,7 +138,11 @@
       </a-table>
     </a-card>
 
-    <TaskLogModal v-model:open="logModalVisible" :task-id="logTaskId" />
+    <TaskLogModal
+      v-model:open="logModalVisible"
+      :task-id="logTaskId"
+      :status="logTaskStatus"
+    />
   </div>
 </template>
 
@@ -166,6 +162,7 @@ import { formatDuration, progressMeta, isErrorStatus } from '../utils/task'
 import { copyToClipboard } from '../utils/clipboard'
 import PageHeader from '../components/PageHeader.vue'
 import StatusTag from '../components/StatusTag.vue'
+import TaskActions from '../components/TaskActions.vue'
 import TaskCell from '../components/TaskCell.vue'
 import TaskLogModal from '../components/TaskLogModal.vue'
 
@@ -177,6 +174,11 @@ const quickDownloadForm = ref({ url: '', outputName: '' })
 const logModalVisible = ref(false)
 const logTaskId = ref(null)
 
+// 打开中的日志对应的任务状态：随轮询更新，用于决定是否持续刷新日志
+const logTaskStatus = computed(
+  () => taskStore.tasks.find(t => t.id === logTaskId.value)?.status || ''
+)
+
 const progressGradient = { from: '#6366f1', to: '#8b5cf6' }
 
 const columns = [
@@ -185,7 +187,7 @@ const columns = [
   { title: '状态', dataIndex: 'status', key: 'status', width: 130 },
   { title: '进度', dataIndex: 'progress', key: 'progress', width: 200 },
   { title: '耗时', key: 'duration', width: 100, responsive: ['lg'] },
-  { title: '操作', key: 'action', width: 120 }
+  { title: '操作', key: 'action', width: 150 }
 ]
 
 const recentTasks = computed(() => taskStore.tasks.slice(0, 5))
@@ -271,6 +273,24 @@ async function deleteTask(id) {
     message.success('删除成功')
   } catch {
     message.error('删除失败')
+  }
+}
+
+async function handleCancel(task) {
+  try {
+    await taskStore.cancelTask(task.id)
+    message.success('已取消任务')
+  } catch (err) {
+    message.error(err.response?.data?.error || '取消失败')
+  }
+}
+
+async function handleRetry(task) {
+  try {
+    await taskStore.retryTask(task.id)
+    message.success('已加入下载队列')
+  } catch (err) {
+    message.error(err.response?.data?.error || '重试失败')
   }
 }
 

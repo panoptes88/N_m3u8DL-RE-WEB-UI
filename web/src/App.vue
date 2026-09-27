@@ -147,11 +147,29 @@
         @ok="handleChangePasswordOk"
         @cancel="handleChangePasswordCancel"
       >
-        <a-form :model="changePasswordForm" layout="vertical">
-          <a-form-item label="新密码" name="newPassword" :rules="[{ required: true, message: '请输入新密码' }]">
+        <a-alert
+          type="warning"
+          show-icon
+          message="修改成功后需要重新登录"
+          description="本系统为单用户模式且没有找回密码入口，请务必确认两次输入一致。"
+          style="margin-bottom: 16px"
+        />
+        <a-form
+          ref="changePasswordFormRef"
+          :model="changePasswordForm"
+          :rules="changePasswordRules"
+          layout="vertical"
+        >
+          <a-form-item label="新密码" name="newPassword">
             <a-input-password
               v-model:value="changePasswordForm.newPassword"
               placeholder="请输入新密码"
+            />
+          </a-form-item>
+          <a-form-item label="确认新密码" name="confirmPassword">
+            <a-input-password
+              v-model:value="changePasswordForm.confirmPassword"
+              placeholder="请再次输入新密码"
               @pressEnter="handleChangePasswordOk"
             />
           </a-form-item>
@@ -210,9 +228,25 @@ const handleResize = () => {
 // 修改密码相关
 const changePasswordVisible = ref(false)
 const changePasswordLoading = ref(false)
+const changePasswordFormRef = ref(null)
 const changePasswordForm = reactive({
-  newPassword: ''
+  newPassword: '',
+  confirmPassword: ''
 })
+
+// 单用户系统没有找回入口，输错即锁死，因此必须二次确认
+const changePasswordRules = {
+  newPassword: [{ required: true, message: '请输入新密码' }],
+  confirmPassword: [
+    { required: true, message: '请再次输入新密码' },
+    {
+      validator: (_rule, value) =>
+        value === changePasswordForm.newPassword
+          ? Promise.resolve()
+          : Promise.reject('两次输入的密码不一致')
+    }
+  ]
+}
 
 const menuItems = [
   {
@@ -258,6 +292,7 @@ function handleUserMenuClick({ key }) {
   if (key === 'change-password') {
     changePasswordVisible.value = true
     changePasswordForm.newPassword = ''
+    changePasswordForm.confirmPassword = ''
   } else if (key === 'logout') {
     userStore.logout().then(() => {
       router.push('/login')
@@ -266,8 +301,9 @@ function handleUserMenuClick({ key }) {
 }
 
 async function handleChangePasswordOk() {
-  if (!changePasswordForm.newPassword) {
-    message.warning('请输入新密码')
+  try {
+    await changePasswordFormRef.value.validate()
+  } catch {
     return
   }
 
@@ -291,6 +327,8 @@ async function handleChangePasswordOk() {
 function handleChangePasswordCancel() {
   changePasswordVisible.value = false
   changePasswordForm.newPassword = ''
+  changePasswordForm.confirmPassword = ''
+  changePasswordFormRef.value?.clearValidate()
 }
 
 onMounted(async () => {

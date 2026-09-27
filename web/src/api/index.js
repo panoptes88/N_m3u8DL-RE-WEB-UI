@@ -51,8 +51,9 @@ export function post(url, data) {
   return api.post(url, data)
 }
 
-export function del(url) {
-  return api.delete(url)
+export function del(url, data) {
+  // 需要携带 body 时（如批量删除）走 axios 的 data 选项
+  return api.delete(url, data ? { data } : undefined)
 }
 
 export function put(url, data) {

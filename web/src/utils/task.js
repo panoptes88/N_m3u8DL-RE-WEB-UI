@@ -24,6 +24,16 @@ export function isActiveStatus(status) {
   return status === 'pending' || status === 'downloading'
 }
 
+// 可以取消：正在进行或排队中的任务
+export function canCancel(status) {
+  return isActiveStatus(status)
+}
+
+// 可以重试：已结束的任务（失败/中断/想重新下载的已完成任务）
+export function canRetry(status) {
+  return !isActiveStatus(status)
+}
+
 // 下载耗时：已结束用 finished_at，进行中用当前时间
 export function formatDuration(task) {
   if (!task || !task.created_at || task.status === 'pending') return '-'

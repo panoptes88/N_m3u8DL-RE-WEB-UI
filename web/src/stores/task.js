@@ -9,7 +9,20 @@ export const useTaskStore = defineStore('task', () => {
   // 否则筛选结果会在下一次轮询时被全量数据覆盖
   const statusFilter = ref('')
   let pollingTimer = null
-  const pollingInterval = 5000 // 轮询间隔 5 秒
+  let polling = false
+
+  // 自适应轮询间隔：有任务在下载时用较短的间隔，让进度看起来是「实时」的；
+  // 空闲时放慢，减少无谓请求。
+  // 这里用「每次请求完重新计算下一次延迟」的方式，
+  // 而不是固定 setInterval，因此下载开始/结束能立刻改变节奏。
+  const POLL_INTERVAL_ACTIVE = 2000
+  const POLL_INTERVAL_IDLE = 5000
+
+  function nextInterval() {
+    return tasks.value.some(t => t.status === 'downloading' || t.status === 'pending')
+      ? POLL_INTERVAL_ACTIVE
+      : POLL_INTERVAL_IDLE
+  }
 
   // 统一获取任务列表（始终带上当前筛选条件）
   async function fetchTasks() {
@@ -41,23 +54,32 @@ export const useTaskStore = defineStore('task', () => {
     statusFilter.value = ''
   }
 
+  function scheduleNext() {
+    pollingTimer = setTimeout(async () => {
+      if (!polling) return
+      await fetchTasks()
+      if (polling) scheduleNext()
+    }, nextInterval())
+  }
+
   // 启动轮询（单例模式）
   // 注意：即使已在轮询中也会先立即刷新一次，
   // 保证页面切换/筛选变化后立刻拿到最新数据
   function startPolling() {
-    fetchTasks()
-    if (pollingTimer) {
-      return // 定时器已存在，不重复创建
-    }
-    pollingTimer = setInterval(() => {
+    if (polling) {
       fetchTasks()
-    }, pollingInterval)
+      return
+    }
+    polling = true
+    fetchTasks()
+    scheduleNext()
   }
 
   // 停止轮询
   function stopPolling() {
+    polling = false
     if (pollingTimer) {
-      clearInterval(pollingTimer)
+      clearTimeout(pollingTimer)
       pollingTimer = null
     }
   }

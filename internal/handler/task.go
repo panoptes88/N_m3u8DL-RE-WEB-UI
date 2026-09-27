@@ -13,7 +13,7 @@ import (
 // CreateTaskRequest 创建任务请求
 type CreateTaskRequest struct {
 	URL                string `json:"url" binding:"required"`
-	OutputName         string `json:"output_name" binding:"required"`
+	OutputName         string `json:"output_name"` // 允许为空：service 层会用 generateOutputName(url) 兜底
 	ThreadCount        int    `json:"thread_count"`
 	RetryCount         int    `json:"retry_count"`
 	Headers            string `json:"headers"`

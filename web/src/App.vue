@@ -1,5 +1,5 @@
 <template>
-  <a-config-provider :theme="themeConfig">
+  <a-config-provider :theme="themeConfig" :locale="zhCN">
     <div class="app-container">
       <template v-if="userStore.isLoggedIn">
         <a-layout class="layout">
@@ -139,6 +139,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
+import zhCN from 'ant-design-vue/es/locale/zh_CN'
 import { useUserStore } from './stores/user'
 import { useAppStore } from './stores/app'
 import { getThemeConfig } from './theme'

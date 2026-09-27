@@ -191,9 +191,9 @@
       <template #extra>
         <a-space>
           <a-select
-            v-model:value="statusFilter"
+            v-model:value="taskStore.statusFilter"
             style="width: 120px"
-            @change="fetchTasks"
+            @change="taskStore.setStatusFilter"
           >
             <a-select-option value="">全部</a-select-option>
             <a-select-option value="pending">等待中</a-select-option>
@@ -201,7 +201,7 @@
             <a-select-option value="completed">已完成</a-select-option>
             <a-select-option value="failed">失败</a-select-option>
           </a-select>
-          <a-button @click="fetchTasks">
+          <a-button @click="taskStore.fetchTasks">
             <template #icon><ReloadOutlined /></template>
             刷新
           </a-button>
@@ -336,11 +336,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { ReloadOutlined, SettingOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore } from '../stores/task'
 import { useProfileStore } from '../stores/profile'
@@ -348,7 +347,6 @@ import PageHeader from '../components/PageHeader.vue'
 import StatusTag from '../components/StatusTag.vue'
 import TaskLogModal from '../components/TaskLogModal.vue'
 
-dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
 
 const taskStore = useTaskStore()
@@ -356,7 +354,6 @@ const profileStore = useProfileStore()
 
 const creating = ref(false)
 const formRef = ref(null)
-const statusFilter = ref('')
 const keepFormAfterCreate = ref(false) // 创建后保留表单
 const logModalVisible = ref(false)
 const logTaskId = ref(null)
@@ -445,11 +442,6 @@ async function saveProfileName(profile) {
     }
   }
   editingProfileId.value = null
-}
-
-async function fetchTasks() {
-  const status = statusFilter.value ? `?status=${statusFilter.value}` : ''
-  await taskStore.fetchTasks(status)
 }
 
 function resetForm() {
@@ -625,6 +617,12 @@ onMounted(() => {
   taskStore.startPolling()
   // 加载下载方案列表
   profileStore.fetchProfiles()
+})
+
+onUnmounted(() => {
+  // 离开任务页时停止轮询，并复位筛选，避免影响首页的「最近任务」
+  taskStore.stopPolling()
+  taskStore.resetStatusFilter()
 })
 </script>
 

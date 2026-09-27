@@ -360,17 +360,9 @@ async function deleteFile(name) {
 }
 
 async function batchDelete() {
-  if (selectedRowKeys.value.length === 0) {
-    return
-  }
-
-  const names = selectedRowKeys.value.filter(name => {
-    const file = files.value.find(f => f.name === name)
-    return file && !file.isDir
-  })
-
+  // 后端 ListFiles 只返回文件（目录已被跳过），选中的必然都是文件
+  const names = selectedRowKeys.value
   if (names.length === 0) {
-    message.warning('没有可删除的文件')
     return
   }
 

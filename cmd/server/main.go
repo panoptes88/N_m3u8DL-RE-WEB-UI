@@ -68,6 +68,7 @@ func main() {
 		api.POST("/auth/login", handler.Login)
 		api.POST("/auth/logout", handler.Logout)
 		api.POST("/auth/change-password", handler.ChangePassword)
+		api.GET("/auth/hint", handler.LoginHint)
 
 		// 需要认证的路由
 		protected := api.Group("")

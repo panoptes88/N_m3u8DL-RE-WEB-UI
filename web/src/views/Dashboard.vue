@@ -105,7 +105,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   ClockCircleOutlined,
@@ -184,6 +184,11 @@ async function deleteTask(id) {
 onMounted(() => {
   // 使用 store 统一管理的轮询（单例模式）
   taskStore.startPolling()
+})
+
+onUnmounted(() => {
+  // 离开首页即停止轮询，避免在登录页等场景继续后台请求
+  taskStore.stopPolling()
 })
 </script>
 

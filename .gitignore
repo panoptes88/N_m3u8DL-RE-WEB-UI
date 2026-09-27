@@ -34,3 +34,9 @@ Thumbs.db
 # Temporary
 *.tmp
 .temp/
+
+# npm 本地缓存（沙箱内构建时使用）
+.npm-cache/
+
+# Docker CLI 配置（沙箱内构建时使用）
+.docker-config/

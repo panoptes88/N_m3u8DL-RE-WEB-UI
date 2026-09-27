@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -56,8 +57,15 @@ func main() {
 	r.Static("/static", "./web/dist/static")
 	r.StaticFile("/favicon.ico", "./web/dist/favicon.ico")
 
-	// SPA 路由支持：所有未匹配的路径返回 index.html
+	// SPA 路由支持：所有未匹配的非 API 路径返回 index.html
 	r.NoRoute(func(c *gin.Context) {
+		// 未匹配的 API 路径必须返回 JSON 404，
+		// 否则会被 SPA 兜底成 200 + index.html，
+		// 既让前端难以判断错误，也会让健康检查产生假阳性
+		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "接口不存在"})
+			return
+		}
 		c.File("./web/dist/index.html")
 	})
 
@@ -69,6 +77,8 @@ func main() {
 		api.POST("/auth/logout", handler.Logout)
 		api.POST("/auth/change-password", handler.ChangePassword)
 		api.GET("/auth/hint", handler.LoginHint)
+		// 健康检查：无需鉴权，供容器 healthcheck 使用
+		api.GET("/health", handler.Health)
 
 		// 需要认证的路由
 		protected := api.Group("")
@@ -92,6 +102,8 @@ func main() {
 			protected.GET("/files", handler.ListFiles)
 			protected.GET("/files/download", handler.DownloadFile)
 			protected.DELETE("/files/:name", handler.DeleteFile)
+			// 批量删除用 DELETE /files + JSON body，避免与 /files/:name 的路由冲突
+			protected.DELETE("/files", handler.BatchDeleteFiles)
 
 			// 下载方案管理
 			protected.GET("/profiles", handler.ListProfiles)

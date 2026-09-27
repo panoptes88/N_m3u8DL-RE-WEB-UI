@@ -22,7 +22,19 @@ services:
       - LANG=C.UTF-8
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/user"]
+      # 原检查有两个问题：最终镜像里没有 wget，且 /api/user 需要登录、
+      # 未登录恒返回 401，因此容器永远不可能变为 healthy。
+      # 改为用镜像内已有的 bash 直接发一个 HTTP 请求打 /api/health，
+      # 并校验响应体，避免被 SPA 兜底路由的 200 骗过。
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /api/health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          grep -q '"status":"ok"' <&3
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s

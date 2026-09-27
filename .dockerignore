@@ -25,6 +25,9 @@ web/dist/
 # 沙箱内构建时使用的 Docker CLI 配置目录
 .docker-config/
 
+# 本地验证工具（无头浏览器等）
+.tools/
+
 # IDE
 .idea/
 .vscode/

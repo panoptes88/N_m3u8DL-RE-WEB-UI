@@ -7,6 +7,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { statusMeta } from '../utils/task'
 
 const props = defineProps({
   status: {
@@ -15,15 +16,7 @@ const props = defineProps({
   }
 })
 
-const STATUS_META = {
-  pending: { text: '等待中', color: '#f59e0b' },
-  downloading: { text: '下载中', color: '#6366f1' },
-  completed: { text: '已完成', color: '#10b981' },
-  failed: { text: '下载失败', color: '#ef4444' },
-  interrupted: { text: '已中断', color: '#f97316' }
-}
-
-const meta = computed(() => STATUS_META[props.status] || { text: props.status, color: '#98a2b8' })
+const meta = computed(() => statusMeta(props.status))
 const text = computed(() => meta.value.text)
 const tagStyle = computed(() => ({
   color: meta.value.color,

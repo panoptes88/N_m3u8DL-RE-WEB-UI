@@ -87,6 +87,7 @@ import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { ReloadOutlined, PlayCircleOutlined, FileOutlined } from '@ant-design/icons-vue'
 import { get, del } from '../api'
+import { copyToClipboard } from '../utils/clipboard'
 import Player from 'xgplayer'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -183,32 +184,6 @@ async function fetchFiles() {
 
 function downloadFile(name) {
   window.open(`/api/files/download?name=${encodeURIComponent(name)}`, '_blank')
-}
-
-// 点击复制到粘贴板
-async function copyToClipboard(text) {
-  try {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text)
-      message.success('已复制到粘贴板')
-      return
-    }
-  } catch {
-    // 忽略，回退
-  }
-  try {
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-    message.success('已复制到粘贴板')
-  } catch {
-    message.error('复制失败')
-  }
 }
 
 async function playVideo(record) {

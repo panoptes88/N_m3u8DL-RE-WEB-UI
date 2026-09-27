@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"N_m3u8DL-RE-WEB-UI/internal/model"
 	"N_m3u8DL-RE-WEB-UI/internal/service"
@@ -34,8 +35,9 @@ func ListTasks(c *gin.Context) {
 	status := c.Query("status")
 
 	query := model.GetDB().Model(&model.Task{})
+	// 支持逗号分隔的多状态筛选，例如 status=failed,interrupted
 	if status != "" {
-		query = query.Where("status = ?", status)
+		query = query.Where("status IN ?", strings.Split(status, ","))
 	}
 	query = query.Order("created_at DESC").Find(&tasks)
 

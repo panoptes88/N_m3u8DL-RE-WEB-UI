@@ -40,3 +40,6 @@ Thumbs.db
 
 # Docker CLI 配置（沙箱内构建时使用）
 .docker-config/
+
+# 本地验证工具（无头浏览器等）
+.tools/

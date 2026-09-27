@@ -192,14 +192,14 @@
         <a-space>
           <a-select
             v-model:value="taskStore.statusFilter"
-            style="width: 120px"
+            style="width: 140px"
             @change="taskStore.setStatusFilter"
           >
             <a-select-option value="">全部</a-select-option>
             <a-select-option value="pending">等待中</a-select-option>
             <a-select-option value="downloading">下载中</a-select-option>
             <a-select-option value="completed">已完成</a-select-option>
-            <a-select-option value="failed">失败</a-select-option>
+            <a-select-option value="failed,interrupted">失败/中断</a-select-option>
           </a-select>
           <a-button @click="taskStore.fetchTasks">
             <template #icon><ReloadOutlined /></template>
@@ -211,30 +211,45 @@
       <a-table
         :columns="columns"
         :data-source="taskStore.tasks"
-        :pagination="{ pageSize: 10 }"
+        :pagination="{ pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }"
         :loading="taskStore.loading"
-        :scroll="{ x: 800 }"
+        :scroll="{ x: 1106 }"
+        :row-class-name="rowClassName"
+        :sticky="{ offsetHeader: 60 }"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'url'">
-            <a-tooltip :title="record.url" placement="topLeft">
-              <span class="copyable-text" @click="copyToClipboard(record.url)">{{ record.url }}</span>
-            </a-tooltip>
-          </template>
-          <template v-if="column.key === 'outputName'">
-            <a-tooltip :title="record.output_name" placement="topLeft">
-              <span class="copyable-text" @click="copyToClipboard(record.output_name)">{{ record.output_name }}</span>
-            </a-tooltip>
+          <template v-if="column.key === 'task'">
+            <TaskCell
+              :output-name="record.output_name"
+              :url="record.url"
+              @copy="copyToClipboard"
+            />
           </template>
           <template v-if="column.key === 'status'">
-            <StatusTag :status="record.status" />
+            <a-space :size="4">
+              <StatusTag :status="record.status" />
+              <a-tooltip v-if="record.error_msg" :title="record.error_msg" placement="topLeft">
+                <ExclamationCircleOutlined class="error-hint" />
+              </a-tooltip>
+            </a-space>
           </template>
           <template v-if="column.key === 'progress'">
-            <a-progress
-              :percent="record.progress"
-              :status="record.status === 'failed' ? 'exception' : 'active'"
-              :stroke-color="record.status === 'failed' ? undefined : progressGradient"
-            />
+            <div class="progress-cell">
+              <a-progress
+                :percent="record.progress"
+                :status="isErrorStatus(record.status) ? 'exception' : 'active'"
+                :stroke-color="isErrorStatus(record.status) ? undefined : progressGradient"
+                :show-info="false"
+                size="small"
+              />
+              <div class="progress-meta">
+                <span class="progress-percent">{{ record.progress }}%</span>
+                <span v-if="progressMeta(record)" class="progress-detail">{{ progressMeta(record) }}</span>
+              </div>
+            </div>
+          </template>
+          <template v-if="column.key === 'duration'">
+            {{ formatDuration(record) }}
           </template>
           <template v-if="column.key === 'createdAt'">
             {{ formatTime(record.created_at) }}
@@ -251,6 +266,13 @@
               </a-popconfirm>
             </a-space>
           </template>
+        </template>
+        <template #emptyText>
+          <a-empty :description="taskStore.statusFilter ? '当前筛选条件下没有任务' : '还没有任务，先在上方创建一个吧'">
+            <a-button v-if="taskStore.statusFilter" size="small" @click="taskStore.setStatusFilter('')">
+              查看全部任务
+            </a-button>
+          </a-empty>
         </template>
       </a-table>
     </a-card>
@@ -337,18 +359,27 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { ReloadOutlined, SettingOutlined } from '@ant-design/icons-vue'
+import {
+  ReloadOutlined,
+  SettingOutlined,
+  ExclamationCircleOutlined
+} from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore } from '../stores/task'
 import { useProfileStore } from '../stores/profile'
+import { formatDuration, progressMeta, isErrorStatus } from '../utils/task'
+import { copyToClipboard } from '../utils/clipboard'
 import PageHeader from '../components/PageHeader.vue'
 import StatusTag from '../components/StatusTag.vue'
+import TaskCell from '../components/TaskCell.vue'
 import TaskLogModal from '../components/TaskLogModal.vue'
 
 dayjs.locale('zh-cn')
 
+const route = useRoute()
 const taskStore = useTaskStore()
 const profileStore = useProfileStore()
 
@@ -391,13 +422,13 @@ const formRules = {
 }
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-  { title: 'URL', dataIndex: 'url', key: 'url', width: 200, ellipsis: true },
-  { title: '输出', dataIndex: 'output_name', key: 'outputName', width: 100 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 120 },
-  { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 150, responsive: ['lg'] },
-  { title: '操作', key: 'action', width: 170 }
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 56 },
+  { title: '任务', key: 'task', width: 260 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 230 },
+  { title: '耗时', key: 'duration', width: 100, responsive: ['lg'] },
+  { title: '创建时间', dataIndex: 'created_at', key: 'createdAt', width: 170, responsive: ['xl'] },
+  { title: '操作', key: 'action', width: 170, fixed: 'right' }
 ]
 
 const profileColumns = [
@@ -513,33 +544,6 @@ async function handleDelete(id) {
   }
 }
 
-// 点击复制到粘贴板（URL、输出文件名）
-// 优先用 Clipboard API（需安全上下文：HTTPS 或 localhost），不可用时回退到 execCommand（兼容 http://IP 访问）
-async function copyToClipboard(text) {
-  try {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text)
-      message.success('已复制到粘贴板')
-      return
-    }
-  } catch {
-    // 忽略，回退到 execCommand
-  }
-  try {
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-    message.success('已复制到粘贴板')
-  } catch {
-    message.error('复制失败')
-  }
-}
-
 // 保存任务为方案
 async function saveAsProfile(task) {
   try {
@@ -612,8 +616,21 @@ function viewLog(task) {
   logModalVisible.value = true
 }
 
+// 异常结束的任务整行淡色区分，便于快速扫视
+function rowClassName(record) {
+  if (record.status === 'failed') return 'row-failed'
+  if (record.status === 'interrupted') return 'row-interrupted'
+  return ''
+}
+
 onMounted(() => {
-  // 使用 store 统一管理的轮询（单例模式）
+  // 支持从首页统计卡带筛选条件跳转过来（/tasks?status=failed,interrupted）
+  const status = typeof route.query.status === 'string' ? route.query.status : ''
+  taskStore.resetStatusFilter()
+  if (status) {
+    taskStore.statusFilter = status
+  }
+  // 使用 store 统一管理的轮询（单例模式），会立即带上筛选条件刷新一次
   taskStore.startPolling()
   // 加载下载方案列表
   profileStore.fetchProfiles()
@@ -637,17 +654,58 @@ onUnmounted(() => {
   flex: 1;
 }
 
-.copyable-text {
-  cursor: pointer;
-  display: inline-block;
-  max-width: 100%;
+/* 进度单元格：细进度条 + 下方速度/大小 */
+.progress-cell {
+  min-width: 0;
+}
+
+.progress-cell :deep(.ant-progress) {
+  width: 100%;
+  margin-bottom: 0;
+  line-height: 1;
+}
+
+.progress-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-percent {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.progress-detail {
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  vertical-align: bottom;
 }
 
-.copyable-text:hover {
-  color: var(--brand);
+/* 失败/中断任务的错误提示图标 */
+.error-hint {
+  color: #ef4444;
+  cursor: help;
+}
+
+/* 异常结束的任务整行淡色区分 */
+.task-list :deep(.row-failed) > td {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.task-list :deep(.row-interrupted) > td {
+  background: rgba(249, 115, 22, 0.06);
+}
+
+.task-list :deep(.row-failed:hover) > td {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.task-list :deep(.row-interrupted:hover) > td {
+  background: rgba(249, 115, 22, 0.12);
 }
 </style>

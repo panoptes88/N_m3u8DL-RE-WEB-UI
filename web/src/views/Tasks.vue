@@ -41,134 +41,126 @@
           </a-col>
         </a-row>
 
+        <!-- 基础字段常驻：覆盖绝大多数使用场景 -->
         <a-row :gutter="16">
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="输出文件名" name="outputName">
+          <a-col :xs="24" :sm="16">
+            <a-form-item label="输出文件名（可选，留空自动生成）" name="outputName">
               <a-input
                 v-model:value="formState.outputName"
                 placeholder="output.mp4"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="线程数" name="threadCount">
-              <a-input-number v-model:value="formState.threadCount" :min="1" :max="128" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="重试次数" name="retryCount">
-              <a-input-number v-model:value="formState.retryCount" :min="0" :max="100" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-        </a-row>
-
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="12">
-            <a-form-item label="请求头" name="headers">
-              <a-input
-                v-model:value="formState.headers"
-                placeholder='如: Cookie: xxx; User-Agent: xxx'
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12">
-            <a-form-item label="Base URL" name="baseUrl">
-              <a-input
-                v-model:value="formState.baseUrl"
-                placeholder="可选，用于补全相对路径"
+                size="large"
               />
             </a-form-item>
           </a-col>
         </a-row>
 
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="delAfterDone">
+        <!-- 其余配置收进折叠面板，避免首屏 15 个字段平铺 -->
+        <a-collapse v-model:activeKey="advancedPanels" ghost class="advanced-collapse">
+          <a-collapse-panel key="advanced">
+            <template #header>
+              <span class="advanced-header">
+                高级设置
+                <span class="advanced-hint">线程 / 请求头 / 解密 / 代理 / 自定义参数</span>
+              </span>
+            </template>
+
+            <div class="form-section-title">下载选项</div>
+            <div class="checkbox-grid">
               <a-checkbox v-model:checked="formState.delAfterDone">
                 下载完成后删除临时文件
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="binaryMerge">
               <a-checkbox v-model:checked="formState.binaryMerge">
                 启用二进制合并
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="autoSelect">
               <a-checkbox v-model:checked="formState.autoSelect">
                 自动选择最佳轨道
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-        </a-row>
-
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="skipSegmentsCheck">
               <a-checkbox v-model:checked="formState.skipSegmentsCheck">
                 跳过完整性检测
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="concurrentDownload">
               <a-checkbox v-model:checked="formState.concurrentDownload">
                 并行下载音视频
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-        </a-row>
+            </div>
 
-        <!-- 解密选项 -->
-        <div class="form-section-title">解密选项</div>
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="解密密钥" name="key">
-              <a-input
-                v-model:value="formState.key"
-                placeholder="KID:KEY 或直接 KEY"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="解密引擎" name="decryptionEngine">
-              <a-select v-model:value="formState.decryptionEngine">
-                <a-select-option value="MP4DECRYPT">MP4DECRYPT</a-select-option>
-                <a-select-option value="FFMPEG">FFMPEG</a-select-option>
-                <a-select-option value="SHAKA_PACKAGER">SHAKA_PACKAGER</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
+            <div class="form-section-title">性能</div>
+            <a-row :gutter="16">
+              <a-col :xs="24" :sm="12" :md="8">
+                <a-form-item label="线程数" name="threadCount">
+                  <a-input-number v-model:value="formState.threadCount" :min="1" :max="128" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :xs="24" :sm="12" :md="8">
+                <a-form-item label="重试次数" name="retryCount">
+                  <a-input-number v-model:value="formState.retryCount" :min="0" :max="100" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+            </a-row>
 
-        <!-- 代理设置 -->
-        <div class="form-section-title">代理设置</div>
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="24" :md="12">
-            <a-form-item label="自定义代理" name="customProxy">
-              <a-input
-                v-model:value="formState.customProxy"
-                placeholder="如: http://127.0.0.1:7890"
-              />
-            </a-form-item>
-          </a-col>
-        </a-row>
+            <div class="form-section-title">请求</div>
+            <a-row :gutter="16">
+              <a-col :xs="24" :sm="12">
+                <a-form-item label="请求头" name="headers">
+                  <a-input
+                    v-model:value="formState.headers"
+                    placeholder='如: Cookie: xxx; User-Agent: xxx'
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :xs="24" :sm="12">
+                <a-form-item label="Base URL" name="baseUrl">
+                  <a-input
+                    v-model:value="formState.baseUrl"
+                    placeholder="可选，用于补全相对路径"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="16">
+              <a-col :xs="24" :sm="12">
+                <a-form-item label="自定义代理" name="customProxy">
+                  <a-input
+                    v-model:value="formState.customProxy"
+                    placeholder="如: http://127.0.0.1:7890"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
 
-        <!-- 自定义参数 -->
-        <div class="form-section-title">其他参数</div>
-        <a-row :gutter="16">
-          <a-col :span="24">
-            <a-form-item label="自定义参数" name="customArgs">
-              <a-input
-                v-model:value="formState.customArgs"
-                placeholder="其他命令行参数，如: --log-level DEBUG"
-              />
-            </a-form-item>
-          </a-col>
-        </a-row>
+            <div class="form-section-title">解密</div>
+            <a-row :gutter="16">
+              <a-col :xs="24" :sm="12" :md="8">
+                <a-form-item label="解密密钥" name="key">
+                  <a-input
+                    v-model:value="formState.key"
+                    placeholder="KID:KEY 或直接 KEY"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :xs="24" :sm="12" :md="8">
+                <a-form-item label="解密引擎" name="decryptionEngine">
+                  <a-select v-model:value="formState.decryptionEngine">
+                    <a-select-option value="MP4DECRYPT">MP4DECRYPT</a-select-option>
+                    <a-select-option value="FFMPEG">FFMPEG</a-select-option>
+                    <a-select-option value="SHAKA_PACKAGER">SHAKA_PACKAGER</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+            </a-row>
+
+            <div class="form-section-title">其他参数</div>
+            <a-row :gutter="16">
+              <a-col :span="24">
+                <a-form-item label="自定义参数" name="customArgs" style="margin-bottom: 0">
+                  <a-input
+                    v-model:value="formState.customArgs"
+                    placeholder="其他命令行参数，如: --log-level DEBUG"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
+          </a-collapse-panel>
+        </a-collapse>
 
         <a-form-item style="margin-bottom: 0">
           <a-space>
@@ -213,7 +205,7 @@
         :data-source="taskStore.tasks"
         :pagination="{ pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }"
         :loading="taskStore.loading"
-        :scroll="{ x: 1106 }"
+        :scroll="{ x: 886 }"
         :row-class-name="rowClassName"
         :sticky="{ offsetHeader: 60 }"
       >
@@ -386,6 +378,8 @@ const profileStore = useProfileStore()
 const creating = ref(false)
 const formRef = ref(null)
 const keepFormAfterCreate = ref(false) // 创建后保留表单
+// 高级设置默认收起，保持首屏简洁（空数组 = 全部收起）
+const advancedPanels = ref([])
 const logModalVisible = ref(false)
 const logTaskId = ref(null)
 const selectedProfileId = ref(null)
@@ -417,18 +411,19 @@ const formState = reactive({
 })
 
 const formRules = {
-  url: [{ required: true, message: '请输入m3u8链接' }],
-  outputName: [{ required: true, message: '请输入输出文件名' }]
+  url: [{ required: true, message: '请输入m3u8链接' }]
+  // outputName 不设为必填：留空时后端会用 generateOutputName(url) 兜底
 }
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 56 },
-  { title: '任务', key: 'task', width: 260 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 230 },
+  { title: '任务', key: 'task', width: 240 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 115 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 215 },
   { title: '耗时', key: 'duration', width: 100, responsive: ['lg'] },
-  { title: '创建时间', dataIndex: 'created_at', key: 'createdAt', width: 170, responsive: ['xl'] },
-  { title: '操作', key: 'action', width: 170, fixed: 'right' }
+  // 创建时间列在 <1600px 时隐藏，否则 1280/1366 这类常见宽度会出现横向滚动
+  { title: '创建时间', dataIndex: 'created_at', key: 'createdAt', width: 150, responsive: ['xxl'] },
+  { title: '操作', key: 'action', width: 160, fixed: 'right' }
 ]
 
 const profileColumns = [
@@ -652,6 +647,50 @@ onUnmounted(() => {
 
 .task-list {
   flex: 1;
+}
+
+/* 高级设置折叠面板：去掉边框，让视觉更轻 */
+.advanced-collapse {
+  margin: 4px 0 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.advanced-collapse :deep(.ant-collapse-header) {
+  padding: 10px 14px !important;
+  align-items: center !important;
+}
+
+.advanced-collapse :deep(.ant-collapse-content-box) {
+  padding: 4px 14px 14px !important;
+}
+
+.advanced-header {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.advanced-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+/* 复选框网格：替代此前用 label=" " 撑位的写法，间距与对齐更稳定 */
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px 16px;
+  margin-bottom: 20px;
+}
+
+.checkbox-grid :deep(.ant-checkbox-wrapper) {
+  margin-inline-start: 0 !important;
 }
 
 /* 进度单元格：细进度条 + 下方速度/大小 */

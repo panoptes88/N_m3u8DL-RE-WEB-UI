@@ -13,13 +13,21 @@
           @keydown.enter="goTasks(stat.filter)"
           @keydown.space.prevent="goTasks(stat.filter)"
         >
-          <div class="stat-icon" :style="{ background: `${stat.color}1a`, color: stat.color }">
-            <component :is="stat.icon" />
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stat.value }}</div>
-            <div class="stat-label">{{ stat.label }}</div>
-          </div>
+          <a-skeleton
+            v-if="initialLoading"
+            active
+            :title="false"
+            :paragraph="{ rows: 2, width: ['38%', '68%'] }"
+          />
+          <template v-else>
+            <div class="stat-icon" :style="{ background: `${stat.color}1a`, color: stat.color }">
+              <component :is="stat.icon" />
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ stat.value }}</div>
+              <div class="stat-label">{{ stat.label }}</div>
+            </div>
+          </template>
         </div>
       </a-col>
     </a-row>
@@ -182,6 +190,9 @@ const columns = [
 
 const recentTasks = computed(() => taskStore.tasks.slice(0, 5))
 
+// 首次加载（还没有任何数据）时用骨架屏代替「0」的闪烁
+const initialLoading = computed(() => taskStore.loading && taskStore.tasks.length === 0)
+
 // 统计口径覆盖全部状态，避免出现「各卡片之和 ≠ 任务总数」
 const countByStatus = statuses =>
   taskStore.tasks.filter(t => statuses.includes(t.status)).length
@@ -287,7 +298,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 14px;
   padding: 20px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   border: 1px solid var(--border-soft);
   box-shadow: var(--card-shadow);
@@ -307,7 +318,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   width: 46px;
   height: 46px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;

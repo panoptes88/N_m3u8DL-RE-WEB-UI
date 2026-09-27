@@ -1,12 +1,24 @@
+/* ============================================================
+   设计令牌
+   注意：这里的颜色需与 src/theme.js 中的 antd token 保持同步，
+   两者分别作用于「自定义样式」与「antd 组件」。
+   ============================================================ */
 :root {
   --brand: #6366f1;
   --brand-strong: #4f46e5;
   --bg-body: #f4f5f9;
   --text-1: #1c2333;
   --text-2: #5f6b85;
-  --text-3: #98a2b8;
+  /* 原 #98a2b8 在白底上对比度约 2.6:1，低于 WCAG AA 的 4.5:1，此处提亮到约 4.8:1 */
+  --text-3: #6b7280;
   --border-soft: #e8eaf2;
   --surface: #ffffff;
+
+  /* 圆角统一为三档：小控件 / 卡片 / 大容器 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
   --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.04);
   --card-shadow-hover: 0 4px 6px rgba(16, 24, 40, 0.05), 0 10px 24px rgba(16, 24, 40, 0.08);
 }
@@ -15,7 +27,7 @@
   --bg-body: #0e1017;
   --text-1: rgba(255, 255, 255, 0.88);
   --text-2: rgba(255, 255, 255, 0.55);
-  --text-3: rgba(255, 255, 255, 0.35);
+  --text-3: rgba(255, 255, 255, 0.45);
   --border-soft: #232838;
   --surface: #151824;
   --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -26,6 +38,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 主题切换时平滑过渡，避免生硬跳变 */
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 #app {
@@ -35,6 +49,7 @@ body {
 /* 页面卡片统一阴影与边框 */
 .app-card {
   border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
   box-shadow: var(--card-shadow);
 }
 
@@ -55,6 +70,12 @@ body {
   height: 14px;
   border-radius: 2px;
   background: linear-gradient(180deg, var(--brand), #8b5cf6);
+}
+
+/* 键盘可达性：统一 focus 样式 */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 /* 滚动条 */
@@ -82,4 +103,16 @@ body {
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.28);
+}
+
+/* 尊重系统的「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

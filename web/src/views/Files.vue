@@ -35,13 +35,23 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
-            <a-space :size="8">
-              <PlayCircleOutlined v-if="isVideoFile(record.name)" class="play-icon" @click="playVideo(record)" />
-              <FileOutlined v-else class="file-icon" />
+            <span class="file-cell">
+              <a-button
+                v-if="isVideoFile(record.name)"
+                type="text"
+                size="small"
+                class="play-button"
+                :aria-label="`播放 ${record.name}`"
+                :title="`播放 ${record.name}`"
+                @click="playVideo(record)"
+              >
+                <template #icon><PlayCircleOutlined /></template>
+              </a-button>
+              <FileOutlined v-else class="file-icon" aria-hidden="true" />
               <a-tooltip :title="record.name">
                 <span class="file-name copyable-text" @click="copyToClipboard(record.name)">{{ record.name }}</span>
               </a-tooltip>
-            </a-space>
+            </span>
           </template>
           <template v-if="column.key === 'size'">
             {{ formatSize(record.size) }}
@@ -388,7 +398,7 @@ onMounted(() => {
   align-items: center;
   padding: 8px 14px;
   margin-bottom: 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: rgba(99, 102, 241, 0.08);
   border: 1px solid rgba(99, 102, 241, 0.2);
 }
@@ -408,18 +418,27 @@ onMounted(() => {
   opacity: 0;
 }
 
-.play-icon {
-  color: var(--brand);
-  cursor: pointer;
-  font-size: 17px;
-  transition: transform 0.2s;
+.file-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
 }
 
-.play-icon:hover {
-  transform: scale(1.15);
+.play-button {
+  flex: none;
+  color: var(--brand);
+  font-size: 17px;
+}
+
+.play-button:hover {
+  color: var(--brand-strong) !important;
+  background: rgba(99, 102, 241, 0.08) !important;
 }
 
 .file-icon {
+  flex: none;
   color: var(--text-3);
   font-size: 16px;
 }

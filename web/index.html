@@ -7,6 +7,23 @@
     <title>N_m3u8DL-RE Web UI</title>
     <meta property="og:title" content="N_m3u8DL-RE" />
     <meta property="og:description" content="N_m3u8DL-RE Web UI - 视频下载管理工具" />
+    <script>
+      // 在首屏绘制前应用主题，避免暗色模式下刷新时闪一下白屏。
+      // 这里的逻辑需与 stores/app.js 保持一致（light / dark / system）
+      (function () {
+        try {
+          var mode = localStorage.getItem('theme') || 'light'
+          var dark =
+            mode === 'dark' ||
+            (mode === 'system' &&
+              window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) document.documentElement.classList.add('dark')
+        } catch (e) {
+          /* localStorage 不可用时忽略 */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

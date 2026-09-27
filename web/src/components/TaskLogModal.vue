@@ -71,7 +71,7 @@ watch(
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-all;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: rgba(100, 116, 139, 0.08);
   color: var(--text-1);
 }

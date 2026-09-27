@@ -190,7 +190,7 @@ onMounted(async () => {
   width: 56px;
   height: 56px;
   margin: 0 auto 14px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -210,13 +210,13 @@ onMounted(async () => {
 .brand-sub {
   margin-top: 4px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .login-card {
   width: 100%;
   padding: 28px 26px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: 0 24px 64px rgba(2, 6, 23, 0.55);
 }
@@ -246,6 +246,6 @@ onMounted(async () => {
 .login-hint {
   margin-top: 18px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.55);
 }
 </style>

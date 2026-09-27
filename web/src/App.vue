@@ -27,44 +27,70 @@
             <!-- 顶部栏 -->
             <a-layout-header class="header">
               <div class="header-left">
-                <!-- 移动端菜单图标 -->
-                <menu-unfold-outlined
+                <!-- 移动端菜单按钮 -->
+                <a-button
+                  type="text"
                   class="trigger mobile-trigger"
+                  aria-label="打开导航菜单"
                   @click="mobileMenuVisible = true"
-                />
-                <!-- PC端收缩图标 -->
-                <menu-unfold-outlined
-                  v-if="appStore.collapsed"
+                >
+                  <template #icon><menu-unfold-outlined /></template>
+                </a-button>
+                <!-- PC端收缩按钮 -->
+                <a-button
+                  type="text"
                   class="trigger pc-trigger"
+                  :aria-label="appStore.collapsed ? '展开侧边栏' : '收起侧边栏'"
                   @click="appStore.toggleCollapsed"
-                />
-                <menu-fold-outlined
-                  v-else
-                  class="trigger pc-trigger"
-                  @click="appStore.toggleCollapsed"
-                />
+                >
+                  <template #icon>
+                    <menu-unfold-outlined v-if="appStore.collapsed" />
+                    <menu-fold-outlined v-else />
+                  </template>
+                </a-button>
               </div>
 
               <div class="header-right">
                 <a-space :size="8">
-                  <!-- 主题切换 -->
-                  <a-tooltip :title="appStore.theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'">
-                    <a-button type="text" class="header-action" @click="appStore.toggleTheme">
+                  <!-- 主题切换：亮色 / 暗色 / 跟随系统 -->
+                  <a-dropdown placement="bottomRight">
+                    <a-button
+                      type="text"
+                      class="header-action"
+                      :aria-label="`主题：${themeLabel}，点击切换`"
+                      :title="`主题：${themeLabel}`"
+                    >
                       <template #icon>
-                        <bulb-filled v-if="appStore.theme === 'dark'" />
+                        <bulb-filled v-if="appStore.resolvedTheme === 'dark'" />
                         <bulb-outlined v-else />
                       </template>
                     </a-button>
-                  </a-tooltip>
+                    <template #overlay>
+                      <a-menu :selectedKeys="[appStore.theme]" @click="handleThemeMenuClick">
+                        <a-menu-item key="light">
+                          <bulb-outlined />
+                          <span style="margin-left: 8px;">亮色</span>
+                        </a-menu-item>
+                        <a-menu-item key="dark">
+                          <bulb-filled />
+                          <span style="margin-left: 8px;">暗色</span>
+                        </a-menu-item>
+                        <a-menu-item key="system">
+                          <desktop-outlined />
+                          <span style="margin-left: 8px;">跟随系统</span>
+                        </a-menu-item>
+                      </a-menu>
+                    </template>
+                  </a-dropdown>
 
                   <!-- 用户下拉菜单 -->
                   <a-dropdown>
-                    <div class="user-dropdown">
+                    <button type="button" class="user-dropdown" aria-label="用户菜单">
                       <a-avatar :size="30" class="user-avatar">
                         <template #icon><user-outlined /></template>
                       </a-avatar>
                       <span class="username">{{ userStore.username }}</span>
-                    </div>
+                    </button>
                     <template #overlay>
                       <a-menu @click="handleUserMenuClick">
                         <a-menu-item key="change-password">
@@ -155,7 +181,8 @@ import {
   LogoutOutlined,
   KeyOutlined,
   BulbOutlined,
-  BulbFilled
+  BulbFilled,
+  DesktopOutlined
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -166,7 +193,15 @@ const appStore = useAppStore()
 const mobileMenuVisible = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
 
-const themeConfig = computed(() => getThemeConfig(appStore.theme))
+const themeConfig = computed(() => getThemeConfig(appStore.resolvedTheme))
+
+// 主题模式的中文名，用于按钮提示与无障碍标签
+const THEME_LABELS = { light: '亮色', dark: '暗色', system: '跟随系统' }
+const themeLabel = computed(() => THEME_LABELS[appStore.theme] || '亮色')
+
+function handleThemeMenuClick({ key }) {
+  appStore.setTheme(key)
+}
 
 const handleResize = () => {
   isMobile.value = window.innerWidth <= 768
@@ -315,16 +350,12 @@ onUnmounted(() => {
 
 .trigger {
   font-size: 17px;
-  cursor: pointer;
-  transition: color 0.2s;
-  padding: 8px;
-  border-radius: 8px;
   color: var(--text-2);
 }
 
 .trigger:hover {
-  color: var(--brand);
-  background: rgba(99, 102, 241, 0.08);
+  color: var(--brand) !important;
+  background: rgba(99, 102, 241, 0.08) !important;
 }
 
 .header-right {
@@ -336,13 +367,18 @@ onUnmounted(() => {
   color: var(--text-2);
 }
 
+/* 触发下拉的用户区：用真实 button 以获得键盘可达性，同时清掉默认按钮外观 */
 .user-dropdown {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
   padding: 4px 8px;
-  border-radius: 8px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: inherit;
   transition: background 0.2s;
 }
 
@@ -371,7 +407,7 @@ onUnmounted(() => {
 
 /* PC端触发器 */
 .pc-trigger {
-  display: inline-block;
+  display: inline-flex;
 }
 
 /* 移动端触发器 */
@@ -390,7 +426,7 @@ onUnmounted(() => {
   }
 
   .mobile-trigger {
-    display: inline-block;
+    display: inline-flex;
   }
 
   .header {

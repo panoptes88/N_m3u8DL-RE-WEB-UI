@@ -1,8 +1,8 @@
 package handler
 
 import (
+	"mime"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +59,12 @@ func DownloadFile(c *gin.Context) {
 	c.Header("Content-Description", "File Transfer")
 	c.Header("Accept-Ranges", "bytes")
 	c.Header("Content-Type", getVideoMimeType(filename))
-	c.Header("Content-Disposition", "attachment; filename="+url.PathEscape(filename))
+	// 使用 mime.FormatMediaType 生成 RFC 5987 兼容的头：
+	// 同时给出 ASCII 回退名与 filename*=UTF-8''…，
+	// 此前直接用 url.PathEscape 拼 filename=，中文文件名在部分浏览器会乱码
+	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
+		"filename": filename,
+	}))
 	c.File(filePath)
 }
 
@@ -84,10 +89,53 @@ func DeleteFile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
 
+type BatchDeleteFilesRequest struct {
+	Names []string `json:"names" binding:"required,min=1"`
+}
+
+// BatchDeleteFiles 批量删除文件。
+// 使用 DELETE /files + JSON body，避免与 /files/:name 产生路由冲突。
+// 前端此前是 N 次串行请求，50 个文件就要 50 次往返。
+func BatchDeleteFiles(c *gin.Context) {
+	var req BatchDeleteFilesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误: " + err.Error()})
+		return
+	}
+
+	cfg := config.Load()
+	deleted := make([]string, 0, len(req.Names))
+	failed := make([]string, 0)
+
+	for _, name := range req.Names {
+		if name == "" {
+			continue
+		}
+		// 防止路径遍历
+		safeName := filepath.Base(name)
+		if err := os.Remove(filepath.Join(cfg.DownloadDir, safeName)); err != nil {
+			failed = append(failed, name)
+			continue
+		}
+		deleted = append(deleted, name)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"deleted": deleted,
+		"failed":  failed,
+	})
+}
+
+// Health 健康检查：无需鉴权，供容器 healthcheck 使用。
+// 不能复用 /api/user，因为它需要登录、未登录返回 401，会让健康检查永远失败。
+func Health(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 func getVideoMimeType(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
-	if mime, ok := videoMimeTypes[ext]; ok {
-		return mime
+	if mimeType, ok := videoMimeTypes[ext]; ok {
+		return mimeType
 	}
 	return "application/octet-stream"
 }

@@ -3,14 +3,15 @@
     <PageHeader title="下载任务" subtitle="创建任务并跟踪下载进度" />
 
     <!-- 创建任务表单 -->
-    <a-card title="创建下载任务" class="app-card">
+    <a-card title="创建下载任务" class="app-card toolbar-card">
       <template #extra>
-        <a-space>
+        <div class="card-toolbar">
           <a-select
             v-model:value="selectedProfileId"
+            class="profile-select"
             placeholder="选择下载方案"
-            style="width: 200px"
             allow-clear
+            :dropdown-match-select-width="false"
             @change="handleProfileChange"
           >
             <a-select-option v-for="profile in profileStore.profiles" :key="profile.id" :value="profile.id">
@@ -21,7 +22,7 @@
             <template #icon><SettingOutlined /></template>
             管理方案
           </a-button>
-        </a-space>
+        </div>
       </template>
       <a-form
         ref="formRef"
@@ -41,134 +42,126 @@
           </a-col>
         </a-row>
 
+        <!-- 基础字段常驻：覆盖绝大多数使用场景 -->
         <a-row :gutter="16">
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="输出文件名" name="outputName">
+          <a-col :xs="24" :sm="16">
+            <a-form-item label="输出文件名（可选，留空自动生成）" name="outputName">
               <a-input
                 v-model:value="formState.outputName"
                 placeholder="output.mp4"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="线程数" name="threadCount">
-              <a-input-number v-model:value="formState.threadCount" :min="1" :max="128" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="重试次数" name="retryCount">
-              <a-input-number v-model:value="formState.retryCount" :min="0" :max="100" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-        </a-row>
-
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="12">
-            <a-form-item label="请求头" name="headers">
-              <a-input
-                v-model:value="formState.headers"
-                placeholder='如: Cookie: xxx; User-Agent: xxx'
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12">
-            <a-form-item label="Base URL" name="baseUrl">
-              <a-input
-                v-model:value="formState.baseUrl"
-                placeholder="可选，用于补全相对路径"
+                size="large"
               />
             </a-form-item>
           </a-col>
         </a-row>
 
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="delAfterDone">
+        <!-- 其余配置收进折叠面板，避免首屏 15 个字段平铺 -->
+        <a-collapse v-model:activeKey="advancedPanels" ghost class="advanced-collapse">
+          <a-collapse-panel key="advanced">
+            <template #header>
+              <span class="advanced-header">
+                <span class="advanced-title">高级设置</span>
+                <span class="advanced-hint">线程 / 请求头 / 解密 / 代理 / 自定义参数</span>
+              </span>
+            </template>
+
+            <div class="form-section-title">下载选项</div>
+            <div class="checkbox-grid">
               <a-checkbox v-model:checked="formState.delAfterDone">
                 下载完成后删除临时文件
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="binaryMerge">
               <a-checkbox v-model:checked="formState.binaryMerge">
                 启用二进制合并
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="autoSelect">
               <a-checkbox v-model:checked="formState.autoSelect">
                 自动选择最佳轨道
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-        </a-row>
-
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="skipSegmentsCheck">
               <a-checkbox v-model:checked="formState.skipSegmentsCheck">
                 跳过完整性检测
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label=" " name="concurrentDownload">
               <a-checkbox v-model:checked="formState.concurrentDownload">
                 并行下载音视频
               </a-checkbox>
-            </a-form-item>
-          </a-col>
-        </a-row>
+            </div>
 
-        <!-- 解密选项 -->
-        <div class="form-section-title">解密选项</div>
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="解密密钥" name="key">
-              <a-input
-                v-model:value="formState.key"
-                placeholder="KID:KEY 或直接 KEY"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :xs="24" :sm="12" :md="8">
-            <a-form-item label="解密引擎" name="decryptionEngine">
-              <a-select v-model:value="formState.decryptionEngine">
-                <a-select-option value="MP4DECRYPT">MP4DECRYPT</a-select-option>
-                <a-select-option value="FFMPEG">FFMPEG</a-select-option>
-                <a-select-option value="SHAKA_PACKAGER">SHAKA_PACKAGER</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
+            <div class="form-section-title">性能</div>
+            <a-row :gutter="16">
+              <a-col :xs="24" :sm="12" :md="8">
+                <a-form-item label="线程数" name="threadCount">
+                  <a-input-number v-model:value="formState.threadCount" :min="1" :max="128" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :xs="24" :sm="12" :md="8">
+                <a-form-item label="重试次数" name="retryCount">
+                  <a-input-number v-model:value="formState.retryCount" :min="0" :max="100" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+            </a-row>
 
-        <!-- 代理设置 -->
-        <div class="form-section-title">代理设置</div>
-        <a-row :gutter="16">
-          <a-col :xs="24" :sm="24" :md="12">
-            <a-form-item label="自定义代理" name="customProxy">
-              <a-input
-                v-model:value="formState.customProxy"
-                placeholder="如: http://127.0.0.1:7890"
-              />
-            </a-form-item>
-          </a-col>
-        </a-row>
+            <div class="form-section-title">请求</div>
+            <a-row :gutter="16">
+              <a-col :xs="24" :sm="12">
+                <a-form-item label="请求头" name="headers">
+                  <a-input
+                    v-model:value="formState.headers"
+                    placeholder='如: Cookie: xxx; User-Agent: xxx'
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :xs="24" :sm="12">
+                <a-form-item label="Base URL" name="baseUrl">
+                  <a-input
+                    v-model:value="formState.baseUrl"
+                    placeholder="可选，用于补全相对路径"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-row :gutter="16">
+              <a-col :xs="24" :sm="12">
+                <a-form-item label="自定义代理" name="customProxy">
+                  <a-input
+                    v-model:value="formState.customProxy"
+                    placeholder="如: http://127.0.0.1:7890"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
 
-        <!-- 自定义参数 -->
-        <div class="form-section-title">其他参数</div>
-        <a-row :gutter="16">
-          <a-col :span="24">
-            <a-form-item label="自定义参数" name="customArgs">
-              <a-input
-                v-model:value="formState.customArgs"
-                placeholder="其他命令行参数，如: --log-level DEBUG"
-              />
-            </a-form-item>
-          </a-col>
-        </a-row>
+            <div class="form-section-title">解密</div>
+            <a-row :gutter="16">
+              <a-col :xs="24" :sm="12" :md="8">
+                <a-form-item label="解密密钥" name="key">
+                  <a-input
+                    v-model:value="formState.key"
+                    placeholder="KID:KEY 或直接 KEY"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :xs="24" :sm="12" :md="8">
+                <a-form-item label="解密引擎" name="decryptionEngine">
+                  <a-select v-model:value="formState.decryptionEngine">
+                    <a-select-option value="MP4DECRYPT">MP4DECRYPT</a-select-option>
+                    <a-select-option value="FFMPEG">FFMPEG</a-select-option>
+                    <a-select-option value="SHAKA_PACKAGER">SHAKA_PACKAGER</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+            </a-row>
+
+            <div class="form-section-title">其他参数</div>
+            <a-row :gutter="16">
+              <a-col :span="24">
+                <a-form-item label="自定义参数" name="customArgs" style="margin-bottom: 0">
+                  <a-input
+                    v-model:value="formState.customArgs"
+                    placeholder="其他命令行参数，如: --log-level DEBUG"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
+          </a-collapse-panel>
+        </a-collapse>
 
         <a-form-item style="margin-bottom: 0">
           <a-space>
@@ -187,123 +180,265 @@
     </a-card>
 
     <!-- 任务列表 -->
-    <a-card title="下载任务" class="app-card task-list">
+    <a-card title="下载任务" class="app-card task-list toolbar-card">
       <template #extra>
-        <a-space>
+        <div class="card-toolbar">
           <a-select
-            v-model:value="statusFilter"
-            style="width: 120px"
-            @change="fetchTasks"
+            v-model:value="taskStore.statusFilter"
+            class="status-select"
+            @change="taskStore.setStatusFilter"
           >
             <a-select-option value="">全部</a-select-option>
             <a-select-option value="pending">等待中</a-select-option>
             <a-select-option value="downloading">下载中</a-select-option>
             <a-select-option value="completed">已完成</a-select-option>
-            <a-select-option value="failed">失败</a-select-option>
+            <a-select-option value="failed,interrupted">失败/中断</a-select-option>
           </a-select>
-          <a-button @click="fetchTasks">
+          <a-button @click="taskStore.fetchTasks">
             <template #icon><ReloadOutlined /></template>
             刷新
           </a-button>
-        </a-space>
+        </div>
       </template>
 
-      <a-table
-        :columns="columns"
-        :data-source="taskStore.tasks"
-        :pagination="{ pageSize: 10 }"
-        :loading="taskStore.loading"
-        :scroll="{ x: 800 }"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'url'">
-            <a-tooltip :title="record.url" placement="topLeft">
-              <span class="copyable-text" @click="copyToClipboard(record.url)">{{ record.url }}</span>
-            </a-tooltip>
-          </template>
-          <template v-if="column.key === 'outputName'">
-            <a-tooltip :title="record.output_name" placement="topLeft">
-              <span class="copyable-text" @click="copyToClipboard(record.output_name)">{{ record.output_name }}</span>
-            </a-tooltip>
-          </template>
-          <template v-if="column.key === 'status'">
+      <!-- 批量操作条 -->
+      <transition name="fade">
+        <div v-if="selectedRowKeys.length > 0" class="batch-bar">
+          <span class="batch-info">已选择 {{ selectedRowKeys.length }} 个任务</span>
+          <a-space :size="8">
+            <a-button size="small" @click="selectedRowKeys = []">取消选择</a-button>
+            <a-popconfirm
+              title="确定删除选中的任务？（下载中的任务会先被终止）"
+              @confirm="batchDelete"
+            >
+              <a-button size="small" type="primary" danger>批量删除</a-button>
+            </a-popconfirm>
+          </a-space>
+        </div>
+      </transition>
+
+      <!-- 移动端：表格在窄屏不可用，改用卡片列表 -->
+      <div v-if="isMobile" class="task-cards">
+        <a-empty
+          v-if="taskStore.tasks.length === 0"
+          :description="taskStore.statusFilter ? '当前筛选条件下没有任务' : '还没有任务，先在上方创建一个吧'"
+        />
+        <div
+          v-for="record in taskStore.tasks"
+          :key="record.id"
+          class="task-card"
+          :class="rowClassName(record)"
+        >
+          <div class="task-card-head">
+            <TaskCell
+              class="task-card-title"
+              :output-name="record.output_name"
+              :url="record.url"
+              @copy="copyToClipboard"
+            />
             <StatusTag :status="record.status" />
-          </template>
-          <template v-if="column.key === 'progress'">
+          </div>
+          <div class="progress-cell">
             <a-progress
               :percent="record.progress"
-              :status="record.status === 'failed' ? 'exception' : 'active'"
-              :stroke-color="record.status === 'failed' ? undefined : progressGradient"
+              :status="isErrorStatus(record.status) ? 'exception' : 'active'"
+              :stroke-color="isErrorStatus(record.status) ? undefined : progressGradient"
+              :show-info="false"
+              size="small"
             />
+            <div class="progress-meta">
+              <span class="progress-percent">{{ record.progress }}%</span>
+              <span v-if="progressMeta(record)" class="progress-detail">{{ progressMeta(record) }}</span>
+            </div>
+          </div>
+          <div v-if="record.error_msg" class="task-card-error">
+            <ExclamationCircleOutlined />
+            <span>{{ record.error_msg }}</span>
+          </div>
+          <div class="task-card-foot">
+            <span class="task-card-meta">
+              #{{ record.id }} · 耗时 {{ formatDuration(record) }}
+            </span>
+            <TaskActions
+              :task="record"
+              show-save-profile
+              @log="viewLog"
+              @cancel="handleCancel"
+              @retry="handleRetry"
+              @save-profile="saveAsProfile"
+              @delete="confirmDelete"
+            />
+          </div>
+        </div>
+      </div>
+
+      <a-table
+        v-else
+        :columns="columns"
+        :data-source="taskStore.tasks"
+        :pagination="{ pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }"
+        :loading="taskStore.loading"
+        :scroll="{ x: 886 }"
+        :row-class-name="rowClassName"
+        :row-selection="rowSelection"
+        :row-key="record => record.id"
+        :sticky="{ offsetHeader: 60 }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'task'">
+            <TaskCell
+              :output-name="record.output_name"
+              :url="record.url"
+              @copy="copyToClipboard"
+            />
+          </template>
+          <template v-if="column.key === 'status'">
+            <a-space :size="4">
+              <StatusTag :status="record.status" />
+              <a-tooltip v-if="record.error_msg" :title="record.error_msg" placement="topLeft">
+                <ExclamationCircleOutlined class="error-hint" />
+              </a-tooltip>
+            </a-space>
+          </template>
+          <template v-if="column.key === 'progress'">
+            <div class="progress-cell">
+              <a-progress
+                :percent="record.progress"
+                :status="isErrorStatus(record.status) ? 'exception' : 'active'"
+                :stroke-color="isErrorStatus(record.status) ? undefined : progressGradient"
+                :show-info="false"
+                size="small"
+              />
+              <div class="progress-meta">
+                <span class="progress-percent">{{ record.progress }}%</span>
+                <span v-if="progressMeta(record)" class="progress-detail">{{ progressMeta(record) }}</span>
+              </div>
+            </div>
+          </template>
+          <template v-if="column.key === 'duration'">
+            {{ formatDuration(record) }}
           </template>
           <template v-if="column.key === 'createdAt'">
             {{ formatTime(record.created_at) }}
           </template>
           <template v-if="column.key === 'action'">
-            <a-space :size="4">
-              <a-button size="small" type="text" @click="viewLog(record)">日志</a-button>
-              <a-button size="small" type="text" @click="saveAsProfile(record)">保存方案</a-button>
-              <a-popconfirm
-                title="确定删除此任务？"
-                @confirm="handleDelete(record.id)"
-              >
-                <a-button size="small" type="text" danger>删除</a-button>
-              </a-popconfirm>
-            </a-space>
+            <TaskActions
+              :task="record"
+              show-save-profile
+              @log="viewLog"
+              @cancel="handleCancel"
+              @retry="handleRetry"
+              @save-profile="saveAsProfile"
+              @delete="confirmDelete"
+            />
           </template>
+        </template>
+        <template #emptyText>
+          <a-empty :description="taskStore.statusFilter ? '当前筛选条件下没有任务' : '还没有任务，先在上方创建一个吧'">
+            <a-button v-if="taskStore.statusFilter" size="small" @click="taskStore.setStatusFilter('')">
+              查看全部任务
+            </a-button>
+          </a-empty>
         </template>
       </a-table>
     </a-card>
 
     <!-- 日志弹窗 -->
-    <TaskLogModal v-model:open="logModalVisible" :task-id="logTaskId" />
+    <TaskLogModal
+      v-model:open="logModalVisible"
+      :task-id="logTaskId"
+      :status="logTaskStatus"
+    />
 
     <!-- 方案管理弹窗 -->
     <a-modal
       v-model:open="showProfileManager"
       title="下载方案管理"
       :footer="null"
-      width="800px"
+      :width="isMobile ? '94vw' : 760"
     >
+      <!-- 窄屏：表格会有很长的横向滚动，改用卡片列表 -->
+      <div v-if="isMobile" class="profile-cards">
+        <a-empty v-if="profileStore.profiles.length === 0" description="还没有保存过方案" />
+        <div v-for="record in pagedProfiles" :key="record.id" class="profile-card">
+          <ProfileCell
+            class="profile-card-body"
+            :name="record.name"
+            :domain="record.domain"
+            @copy="copyToClipboard"
+          />
+          <div class="profile-card-foot">
+            <span class="profile-card-meta">#{{ record.id }} · {{ formatDate(record.created_at) }}</span>
+            <ProfileActions
+              :profile="record"
+              @load="loadProfileToForm"
+              @detail="viewProfileDetail"
+              @rename="startRename"
+              @delete="confirmDeleteProfile"
+            />
+          </div>
+        </div>
+        <!-- 卡片列表同样分页，避免方案多时一路滚动到底 -->
+        <a-pagination
+          v-if="profileStore.profiles.length > profilePageSize"
+          v-model:current="profilePage"
+          :page-size="profilePageSize"
+          :total="profileStore.profiles.length"
+          size="small"
+          simple
+          class="profile-pagination"
+        />
+      </div>
+
       <a-table
+        v-else
         :columns="profileColumns"
         :data-source="profileStore.profiles"
         :pagination="{ pageSize: 10 }"
         :loading="profileStore.loading"
-        :scroll="{ x: 600 }"
+        :row-key="record => record.id"
+        :scroll="{ x: 586 }"
+        table-layout="fixed"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
-            <div v-if="editingProfileId === record.id">
-              <a-input
-                v-model:value="editingProfileName"
-                size="small"
-                @blur="saveProfileName(record)"
-                @pressEnter="$event.target.blur()"
-                autofocus
-              />
-            </div>
-            <div v-else @dblclick="startEditProfileName(record)" style="cursor: pointer">
-              {{ record.name }}
-            </div>
+            <ProfileCell
+              :name="record.name"
+              :domain="record.domain"
+              @copy="copyToClipboard"
+            />
           </template>
           <template v-if="column.key === 'created_at'">
             {{ formatDate(record.created_at) }}
           </template>
           <template v-if="column.key === 'action'">
-            <a-space :size="4">
-              <a-button size="small" type="text" @click="loadProfileToForm(record)">加载</a-button>
-              <a-button size="small" type="text" @click="viewProfileDetail(record)">详情</a-button>
-              <a-popconfirm
-                title="确定删除此方案？"
-                @confirm="handleDeleteProfile(record.id)"
-              >
-                <a-button size="small" type="text" danger>删除</a-button>
-              </a-popconfirm>
-            </a-space>
+            <ProfileActions
+              :profile="record"
+              @load="loadProfileToForm"
+              @detail="viewProfileDetail"
+              @rename="startRename"
+              @delete="confirmDeleteProfile"
+            />
           </template>
         </template>
       </a-table>
+    </a-modal>
+
+    <!-- 方案重命名弹窗 -->
+    <a-modal
+      v-model:open="showProfileRename"
+      title="重命名方案"
+      :confirm-loading="renaming"
+      @ok="handleRenameOk"
+    >
+      <a-input
+        v-model:value="renameValue"
+        placeholder="请输入新的方案名称"
+        @pressEnter="handleRenameOk"
+      />
+      <div class="rename-hint">
+        原名称：{{ renameTarget?.name }}
+      </div>
     </a-modal>
 
     <!-- 方案详情弹窗 -->
@@ -336,36 +471,75 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
-import { ReloadOutlined, SettingOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { message, Modal } from 'ant-design-vue'
+import {
+  ReloadOutlined,
+  SettingOutlined,
+  ExclamationCircleOutlined
+} from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore } from '../stores/task'
 import { useProfileStore } from '../stores/profile'
+import { formatDuration, progressMeta, isErrorStatus } from '../utils/task'
+import { copyToClipboard } from '../utils/clipboard'
+import { useIsMobile } from '../composables/useIsMobile'
 import PageHeader from '../components/PageHeader.vue'
+import ProfileActions from '../components/ProfileActions.vue'
+import ProfileCell from '../components/ProfileCell.vue'
 import StatusTag from '../components/StatusTag.vue'
+import TaskActions from '../components/TaskActions.vue'
+import TaskCell from '../components/TaskCell.vue'
 import TaskLogModal from '../components/TaskLogModal.vue'
 
-dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
 
+const route = useRoute()
 const taskStore = useTaskStore()
 const profileStore = useProfileStore()
 
 const creating = ref(false)
 const formRef = ref(null)
-const statusFilter = ref('')
 const keepFormAfterCreate = ref(false) // 创建后保留表单
+// 高级设置默认收起，保持首屏简洁（空数组 = 全部收起）
+const advancedPanels = ref([])
 const logModalVisible = ref(false)
 const logTaskId = ref(null)
 const selectedProfileId = ref(null)
 const showProfileManager = ref(false)
 const showProfileDetail = ref(false)
 const currentProfile = ref(null)
-const editingProfileId = ref(null)
-const editingProfileName = ref('')
+const selectedRowKeys = ref([])
+const showProfileRename = ref(false)
+const renameTarget = ref(null)
+const renameValue = ref('')
+const renaming = ref(false)
+// 方案卡片列表的分页（与桌面表格的每页条数保持一致）
+const profilePage = ref(1)
+const profilePageSize = 10
+
+// 窄屏改用卡片列表（表格横向滚动在手机上不可用）
+const { isMobile } = useIsMobile()
+
+// 打开中的日志对应的任务状态：随轮询更新，用于决定是否持续刷新日志
+const logTaskStatus = computed(
+  () => taskStore.tasks.find(t => t.id === logTaskId.value)?.status || ''
+)
+
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  onChange: keys => {
+    selectedRowKeys.value = keys
+  }
+}))
+
+// 移动端卡片列表的当前页数据
+const pagedProfiles = computed(() => {
+  const start = (profilePage.value - 1) * profilePageSize
+  return profileStore.profiles.slice(start, start + profilePageSize)
+})
 
 const progressGradient = { from: '#6366f1', to: '#8b5cf6' }
 
@@ -389,26 +563,29 @@ const formState = reactive({
 })
 
 const formRules = {
-  url: [{ required: true, message: '请输入m3u8链接' }],
-  outputName: [{ required: true, message: '请输入输出文件名' }]
+  url: [{ required: true, message: '请输入m3u8链接' }]
+  // outputName 不设为必填：留空时后端会用 generateOutputName(url) 兜底
 }
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-  { title: 'URL', dataIndex: 'url', key: 'url', width: 200, ellipsis: true },
-  { title: '输出', dataIndex: 'output_name', key: 'outputName', width: 100 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 120 },
-  { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 150, responsive: ['lg'] },
-  { title: '操作', key: 'action', width: 170 }
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 56 },
+  { title: '任务', key: 'task', width: 240 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 115 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 215 },
+  { title: '耗时', key: 'duration', width: 100, responsive: ['lg'] },
+  // 创建时间列在 <1600px 时隐藏，否则 1280/1366 这类常见宽度会出现横向滚动
+  { title: '创建时间', dataIndex: 'created_at', key: 'createdAt', width: 150, responsive: ['xxl'] },
+  { title: '操作', key: 'action', width: 160, fixed: 'right' }
 ]
 
 const profileColumns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 50 },
-  { title: '方案名称', dataIndex: 'name', key: 'name', width: 150 },
-  { title: '域名', dataIndex: 'domain', key: 'domain', width: 150 },
-  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 100 },
-  { title: '操作', key: 'action', width: 150 }
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 56 },
+  // 方案名称与域名合并为一列：域名仅在两者不同时才作为副行显示。
+  // 不再使用 antd 的 ellipsis —— 它会让单元格 nowrap，破坏这里的双行结构；
+  // 截断由 ProfileCell 内部处理，配合表格的 table-layout: fixed 生效。
+  { title: '方案', dataIndex: 'name', key: 'name', width: 250 },
+  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 110, ellipsis: true },
+  { title: '操作', key: 'action', width: 170, fixed: 'right' }
 ]
 
 function formatTime(time) {
@@ -424,32 +601,46 @@ function viewProfileDetail(profile) {
   showProfileDetail.value = true
 }
 
-function startEditProfileName(profile) {
-  editingProfileId.value = profile.id
-  editingProfileName.value = profile.name
+// 重命名改用弹窗：原来的「双击内联编辑」没有任何提示，且移动端卡片里无法使用
+function startRename(profile) {
+  renameTarget.value = profile
+  renameValue.value = profile.name
+  showProfileRename.value = true
 }
 
-async function saveProfileName(profile) {
-  if (!editingProfileName.value.trim()) {
-    message.error('方案名称不能为空')
-    editingProfileId.value = null
+async function handleRenameOk() {
+  const name = renameValue.value.trim()
+  if (!name) {
+    message.warning('方案名称不能为空')
+    return
+  }
+  if (!renameTarget.value || name === renameTarget.value.name) {
+    showProfileRename.value = false
     return
   }
 
-  if (editingProfileName.value !== profile.name) {
-    try {
-      await profileStore.updateProfile(profile.id, { name: editingProfileName.value })
-      message.success('方案名称已更新')
-    } catch {
-      message.error('更新失败')
-    }
+  renaming.value = true
+  try {
+    await profileStore.updateProfile(renameTarget.value.id, { name })
+    message.success('方案名称已更新')
+    showProfileRename.value = false
+  } catch (err) {
+    message.error(err.response?.data?.error || '重命名失败')
+  } finally {
+    renaming.value = false
   }
-  editingProfileId.value = null
 }
 
-async function fetchTasks() {
-  const status = statusFilter.value ? `?status=${statusFilter.value}` : ''
-  await taskStore.fetchTasks(status)
+// 删除方案同样需要二次确认（入口在下拉菜单里）
+function confirmDeleteProfile(profile) {
+  Modal.confirm({
+    title: '确定删除此方案？',
+    content: `「${profile.name}」将被删除，此操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: () => handleDeleteProfile(profile.id)
+  })
 }
 
 function resetForm() {
@@ -515,46 +706,80 @@ async function handleCreate() {
 async function handleDelete(id) {
   try {
     await taskStore.deleteTask(id)
+    selectedRowKeys.value = selectedRowKeys.value.filter(k => k !== id)
     message.success('删除成功')
   } catch {
     message.error('删除失败')
   }
 }
 
-// 点击复制到粘贴板（URL、输出文件名）
-// 优先用 Clipboard API（需安全上下文：HTTPS 或 localhost），不可用时回退到 execCommand（兼容 http://IP 访问）
-async function copyToClipboard(text) {
+// 删除是不可逆操作（会终止进程并删除日志），必须二次确认。
+// 入口在下拉菜单里，用 Modal.confirm 比 popconfirm 更合适。
+function confirmDelete(task) {
+  Modal.confirm({
+    title: '确定删除此任务？',
+    content: `「${task.output_name || task.url}」将被删除，此操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: () => handleDelete(task.id)
+  })
+}
+
+// 取消正在进行的任务（记录保留，可再次重试）
+async function handleCancel(task) {
   try {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text)
-      message.success('已复制到粘贴板')
-      return
-    }
-  } catch {
-    // 忽略，回退到 execCommand
+    await taskStore.cancelTask(task.id)
+    message.success('已取消任务')
+  } catch (err) {
+    message.error(err.response?.data?.error || '取消失败')
   }
+}
+
+// 重试已结束的任务
+async function handleRetry(task) {
   try {
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-    message.success('已复制到粘贴板')
-  } catch {
-    message.error('复制失败')
+    await taskStore.retryTask(task.id)
+    message.success('已加入下载队列')
+  } catch (err) {
+    message.error(err.response?.data?.error || '重试失败')
+  }
+}
+
+// 批量删除选中任务
+async function batchDelete() {
+  const ids = [...selectedRowKeys.value]
+  if (ids.length === 0) return
+
+  try {
+    const res = await taskStore.deleteTasks(ids)
+    const deleted = res?.deleted?.length || 0
+    const failed = res?.failed?.length || 0
+    if (deleted > 0) message.success(`已删除 ${deleted} 个任务`)
+    if (failed > 0) message.warning(`${failed} 个任务删除失败`)
+    selectedRowKeys.value = []
+  } catch (err) {
+    message.error(err.response?.data?.error || '批量删除失败')
   }
 }
 
 // 保存任务为方案
+// 后端按「方案内容」判断重复（不比较名称）：
+//   exists  → 已有内容一致的方案，不重复添加
+//   renamed → 内容不同但名称被占用，已自动加序号
 async function saveAsProfile(task) {
   try {
-    await profileStore.saveTaskAsProfile(task.id)
-    message.success('方案保存成功')
-  } catch {
-    message.error('方案保存失败')
+    const res = await profileStore.saveTaskAsProfile(task.id)
+    const name = res?.profile?.name
+    if (res?.action === 'exists') {
+      message.info(`该方案已存在：「${name}」，未重复添加`)
+    } else if (res?.action === 'renamed') {
+      message.success(`名称「${res.requested_name}」已存在，已保存为「${name}」`)
+    } else {
+      message.success(`方案已保存为「${name}」`)
+    }
+  } catch (err) {
+    message.error(err.response?.data?.error || '方案保存失败')
   }
 }
 
@@ -571,6 +796,7 @@ function handleProfileChange(profileId) {
     formState.autoSelect = true
     formState.skipSegmentsCheck = false
     formState.concurrentDownload = false
+    formState.key = ''
     formState.decryptionEngine = 'MP4DECRYPT'
     formState.customArgs = ''
     formState.customProxy = ''
@@ -588,6 +814,8 @@ function handleProfileChange(profileId) {
     formState.autoSelect = profile.auto_select
     formState.skipSegmentsCheck = profile.skip_segments_check || false
     formState.concurrentDownload = profile.concurrent_download || false
+    // 解密密钥不随方案保存：每个视频的密钥各不相同，
+    // 若从方案恢复会把别的视频的密钥注入当前表单
     formState.decryptionEngine = profile.decryption_engine
     formState.customArgs = profile.custom_args || ''
     formState.customProxy = profile.custom_proxy || ''
@@ -620,11 +848,30 @@ function viewLog(task) {
   logModalVisible.value = true
 }
 
+// 异常结束的任务整行淡色区分，便于快速扫视
+function rowClassName(record) {
+  if (record.status === 'failed') return 'row-failed'
+  if (record.status === 'interrupted') return 'row-interrupted'
+  return ''
+}
+
 onMounted(() => {
-  // 使用 store 统一管理的轮询（单例模式）
+  // 支持从首页统计卡带筛选条件跳转过来（/tasks?status=failed,interrupted）
+  const status = typeof route.query.status === 'string' ? route.query.status : ''
+  taskStore.resetStatusFilter()
+  if (status) {
+    taskStore.statusFilter = status
+  }
+  // 使用 store 统一管理的轮询（单例模式），会立即带上筛选条件刷新一次
   taskStore.startPolling()
   // 加载下载方案列表
   profileStore.fetchProfiles()
+})
+
+onUnmounted(() => {
+  // 离开任务页时停止轮询，并复位筛选，避免影响首页的「最近任务」
+  taskStore.stopPolling()
+  taskStore.resetStatusFilter()
 })
 </script>
 
@@ -639,17 +886,312 @@ onMounted(() => {
   flex: 1;
 }
 
-.copyable-text {
-  cursor: pointer;
-  display: inline-block;
-  max-width: 100%;
+/* ===== 卡片头部工具条 =====
+   窄屏下 antd 的 .ant-card-head-wrapper 不换行，而工具条里的下拉是固定宽度：
+   实测 390px 溢出 6px、360px 溢出 36px（按钮超出卡片 13px）、320px 溢出 76px。
+   这里让头部允许换行，并让工具条在窄屏占满一行、下拉改为弹性宽度。 */
+.card-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-select {
+  width: 200px;
+}
+
+.status-select {
+  width: 140px;
+}
+
+@media (max-width: 576px) {
+  .toolbar-card :deep(.ant-card-head-wrapper) {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  /* 标题必须保持自然宽度：
+     antd 给 .ant-card-head-title 的是 flex:1（基宽 0），
+     若让 extra 占满整行，标题会被压缩成 0 宽而消失 */
+  .toolbar-card :deep(.ant-card-head-title) {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  /* 工具条换到第二行并占满整行 */
+  .toolbar-card :deep(.ant-card-extra) {
+    margin-inline-start: 0;
+    flex: 0 0 100%;
+  }
+
+  .card-toolbar {
+    width: 100%;
+  }
+
+  /* min-width: 0 让 flex 子项能收缩到内容宽度以下 */
+  .profile-select,
+  .status-select {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+  }
+}
+
+/* 批量操作条 */
+.batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.batch-info {
+  font-size: 13px;
+  color: var(--text-1);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ===== 移动端卡片列表 ===== */
+.task-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.task-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.task-card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-card-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  word-break: break-all;
+}
+
+.task-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.task-card-meta {
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 卡片上的失败/中断配色与表格保持一致 */
+.task-card.row-failed {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.task-card.row-interrupted {
+  background: rgba(249, 115, 22, 0.06);
+  border-color: rgba(249, 115, 22, 0.28);
+}
+
+/* ===== 方案管理：移动端卡片 ===== */
+.profile-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.profile-card-body {
+  margin-bottom: 10px;
+}
+
+.profile-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.profile-card-meta {
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-pagination {
+  align-self: center;
+  margin-top: 4px;
+}
+
+
+.rename-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-2);
+  word-break: break-all;
+}
+
+/* 高级设置折叠面板：去掉边框，让视觉更轻 */
+.advanced-collapse {
+  margin: 4px 0 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.advanced-collapse :deep(.ant-collapse-header) {
+  padding: 10px 14px !important;
+  align-items: center !important;
+}
+
+.advanced-collapse :deep(.ant-collapse-content-box) {
+  padding: 4px 14px 14px !important;
+}
+
+.advanced-header {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.advanced-title {
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.advanced-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  vertical-align: bottom;
 }
 
-.copyable-text:hover {
-  color: var(--brand);
+/* 窄屏放不下提示语，只保留标题 */
+@media (max-width: 576px) {
+  .advanced-hint {
+    display: none;
+  }
+}
+
+/* 复选框网格：替代此前用 label=" " 撑位的写法，间距与对齐更稳定 */
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px 16px;
+  margin-bottom: 20px;
+}
+
+.checkbox-grid :deep(.ant-checkbox-wrapper) {
+  margin-inline-start: 0 !important;
+}
+
+/* 进度单元格：细进度条 + 下方速度/大小 */
+.progress-cell {
+  min-width: 0;
+}
+
+.progress-cell :deep(.ant-progress) {
+  width: 100%;
+  margin-bottom: 0;
+  line-height: 1;
+}
+
+.progress-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-percent {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.progress-detail {
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 失败/中断任务的错误提示图标 */
+.error-hint {
+  color: #ef4444;
+  cursor: help;
+}
+
+/* 异常结束的任务整行淡色区分 */
+.task-list :deep(.row-failed) > td {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.task-list :deep(.row-interrupted) > td {
+  background: rgba(249, 115, 22, 0.06);
+}
+
+.task-list :deep(.row-failed:hover) > td {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.task-list :deep(.row-interrupted:hover) > td {
+  background: rgba(249, 115, 22, 0.12);
 }
 </style>

@@ -46,10 +46,20 @@ export const useProfileStore = defineStore('profile', () => {
   }
 
   // 将任务保存为方案
+  // 返回 { profile, action, requested_name }：
+  //   action = created | renamed | exists（exists 表示内容重复，未新增）
   async function saveTaskAsProfile(taskId) {
-    const profile = await post(`/tasks/${taskId}/save-as-profile`)
-    profiles.value.unshift(profile)
-    return profile
+    const res = await post(`/tasks/${taskId}/save-as-profile`)
+    const profile = res?.profile
+    if (profile) {
+      const index = profiles.value.findIndex(p => p.id === profile.id)
+      if (index !== -1) {
+        profiles.value[index] = profile
+      } else {
+        profiles.value.unshift(profile)
+      }
+    }
+    return res
   }
 
   return {

@@ -1,6 +1,16 @@
 <template>
   <div class="files-page">
     <PageHeader title="文件管理" subtitle="浏览、播放与下载已完成的文件">
+      <a-select
+        v-model:value="typeFilter"
+        style="width: 120px"
+        @change="selectedRowKeys = []"
+      >
+        <a-select-option value="">全部类型</a-select-option>
+        <a-select-option value="video">视频</a-select-option>
+        <a-select-option value="subtitle">字幕</a-select-option>
+        <a-select-option value="other">其他</a-select-option>
+      </a-select>
       <a-input
         v-model:value="searchKeyword"
         placeholder="搜索文件名"
@@ -14,12 +24,27 @@
     </PageHeader>
 
     <a-card class="app-card files-card">
+      <div class="files-summary">
+        <span>共 <b>{{ filteredFiles.length }}</b> 个文件</span>
+        <span class="summary-sep">·</span>
+        <span>合计 <b>{{ formatSize(totalSize) }}</b></span>
+        <span v-if="filteredFiles.length !== files.length" class="summary-sep">
+          （已从 {{ files.length }} 个中筛选）
+        </span>
+      </div>
+
       <transition name="fade">
         <div class="batch-bar" v-if="selectedRowKeys.length > 0">
           <span class="batch-info">已选择 {{ selectedRowKeys.length }} 个文件</span>
-          <a-button type="primary" danger size="small" @click="batchDelete">
-            批量删除
-          </a-button>
+          <a-space :size="8">
+            <a-button size="small" @click="selectedRowKeys = []">取消选择</a-button>
+            <a-popconfirm
+              title="确定删除选中的文件？"
+              @confirm="batchDelete"
+            >
+              <a-button type="primary" danger size="small">批量删除</a-button>
+            </a-popconfirm>
+          </a-space>
         </div>
       </transition>
 
@@ -35,13 +60,23 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
-            <a-space :size="8">
-              <PlayCircleOutlined v-if="isVideoFile(record.name)" class="play-icon" @click="playVideo(record)" />
-              <FileOutlined v-else class="file-icon" />
+            <span class="file-cell">
+              <a-button
+                v-if="isVideoFile(record.name)"
+                type="text"
+                size="small"
+                class="play-button"
+                :aria-label="`播放 ${record.name}`"
+                :title="`播放 ${record.name}`"
+                @click="playVideo(record)"
+              >
+                <template #icon><PlayCircleOutlined /></template>
+              </a-button>
+              <FileOutlined v-else class="file-icon" aria-hidden="true" />
               <a-tooltip :title="record.name">
                 <span class="file-name copyable-text" @click="copyToClipboard(record.name)">{{ record.name }}</span>
               </a-tooltip>
-            </a-space>
+            </span>
           </template>
           <template v-if="column.key === 'size'">
             {{ formatSize(record.size) }}
@@ -87,24 +122,45 @@ import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { ReloadOutlined, PlayCircleOutlined, FileOutlined } from '@ant-design/icons-vue'
 import { get, del } from '../api'
+import { copyToClipboard } from '../utils/clipboard'
 import Player from 'xgplayer'
 import PageHeader from '../components/PageHeader.vue'
 
 const loading = ref(false)
 const files = ref([])
 const searchKeyword = ref('')
+const typeFilter = ref('')
 const videoModalVisible = ref(false)
 const currentVideoName = ref('')
 const currentVideoUrl = ref('')
 const selectedRowKeys = ref([])
 const pageSize = ref(10)
 
-// 按文件名搜索过滤
+const subtitleExtensions = ['.srt', '.vtt', '.ass', '.ssa', '.sub']
+
+function fileKind(name) {
+  const dot = name.lastIndexOf('.')
+  const ext = dot === -1 ? '' : name.substring(dot).toLowerCase()
+  if (videoExtensions.includes(ext)) return 'video'
+  if (subtitleExtensions.includes(ext)) return 'subtitle'
+  return 'other'
+}
+
+// 按类型 + 文件名关键字过滤
 const filteredFiles = computed(() => {
   const kw = searchKeyword.value.trim().toLowerCase()
-  if (!kw) return files.value
-  return files.value.filter(f => f.name.toLowerCase().includes(kw))
+  const kind = typeFilter.value
+  return files.value.filter(f => {
+    if (kind && fileKind(f.name) !== kind) return false
+    if (kw && !f.name.toLowerCase().includes(kw)) return false
+    return true
+  })
 })
+
+// 当前筛选结果的总大小
+const totalSize = computed(() =>
+  filteredFiles.value.reduce((sum, f) => sum + (f.size || 0), 0)
+)
 
 // 西瓜播放器实例
 let xgPlayer = null
@@ -118,13 +174,16 @@ const paginationConfig = computed(() => ({
   showTotal: (total) => `共 ${total} 个文件`
 }))
 
+// 按中文习惯排序文件名（默认 localeCompare 对中文名的顺序不稳定）
+const sortByName = (a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN')
+
 const columns = [
   {
     title: '文件名',
     dataIndex: 'name',
     key: 'name',
     ellipsis: true,
-    sorter: (a, b) => a.name.localeCompare(b.name),
+    sorter: sortByName,
     width: 150
   },
   {
@@ -183,32 +242,6 @@ async function fetchFiles() {
 
 function downloadFile(name) {
   window.open(`/api/files/download?name=${encodeURIComponent(name)}`, '_blank')
-}
-
-// 点击复制到粘贴板
-async function copyToClipboard(text) {
-  try {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text)
-      message.success('已复制到粘贴板')
-      return
-    }
-  } catch {
-    // 忽略，回退
-  }
-  try {
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-    message.success('已复制到粘贴板')
-  } catch {
-    message.error('复制失败')
-  }
 }
 
 async function playVideo(record) {
@@ -360,31 +393,17 @@ async function deleteFile(name) {
 }
 
 async function batchDelete() {
-  if (selectedRowKeys.value.length === 0) {
-    return
-  }
-
-  const names = selectedRowKeys.value.filter(name => {
-    const file = files.value.find(f => f.name === name)
-    return file && !file.isDir
-  })
-
+  // 后端 ListFiles 只返回文件（目录已被跳过），选中的必然都是文件
+  const names = selectedRowKeys.value
   if (names.length === 0) {
-    message.warning('没有可删除的文件')
     return
   }
 
   try {
-    let success = 0
-    let failed = 0
-    for (const name of names) {
-      try {
-        await del(`/files/${encodeURIComponent(name)}`)
-        success++
-      } catch {
-        failed++
-      }
-    }
+    // 单次批量请求，替代此前 N 次串行 DELETE
+    const res = await del('/files', { names })
+    const success = res?.deleted?.length || 0
+    const failed = res?.failed?.length || 0
 
     if (success > 0) {
       message.success(`成功删除 ${success} 个文件`)
@@ -396,7 +415,7 @@ async function batchDelete() {
     selectedRowKeys.value = []
     fetchFiles()
   } catch (err) {
-    message.error('批量删除失败')
+    message.error(err.response?.data?.error || '批量删除失败')
   }
 }
 
@@ -415,13 +434,32 @@ onMounted(() => {
   padding-top: 12px;
 }
 
+.files-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.files-summary b {
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-sep {
+  color: var(--text-3);
+}
+
 .batch-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 8px 14px;
   margin-bottom: 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: rgba(99, 102, 241, 0.08);
   border: 1px solid rgba(99, 102, 241, 0.2);
 }
@@ -441,18 +479,27 @@ onMounted(() => {
   opacity: 0;
 }
 
-.play-icon {
-  color: var(--brand);
-  cursor: pointer;
-  font-size: 17px;
-  transition: transform 0.2s;
+.file-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
 }
 
-.play-icon:hover {
-  transform: scale(1.15);
+.play-button {
+  flex: none;
+  color: var(--brand);
+  font-size: 17px;
+}
+
+.play-button:hover {
+  color: var(--brand-strong) !important;
+  background: rgba(99, 102, 241, 0.08) !important;
 }
 
 .file-icon {
+  flex: none;
   color: var(--text-3);
   font-size: 16px;
 }

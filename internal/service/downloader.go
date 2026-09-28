@@ -135,6 +135,22 @@ func GetTaskByID(id uint) (*model.Task, error) {
 	return &task, nil
 }
 
+// terminateTaskProcess 终止任务对应的下载进程。
+// DeleteTask 与 CancelTask 共用，避免两处重复的信号处理逻辑。
+func terminateTaskProcess(task *model.Task) {
+	if task.PID <= 0 {
+		return
+	}
+	proc, err := os.FindProcess(task.PID)
+	if err != nil {
+		return
+	}
+	// 发送 SIGTERM 信号优雅终止
+	if err := proc.Signal(syscall.SIGTERM); err == nil {
+		log.Printf("已终止任务 %d 的进程 (PID: %d)", task.ID, task.PID)
+	}
+}
+
 func DeleteTask(id uint) error {
 	task, err := GetTaskByID(id)
 	if err != nil {
@@ -142,14 +158,8 @@ func DeleteTask(id uint) error {
 	}
 
 	// 如果任务还在运行，先终止进程
-	if task.Status == model.TaskStatusDownloading && task.PID > 0 {
-		proc, err := os.FindProcess(task.PID)
-		if err == nil {
-			// 发送 SIGTERM 信号优雅终止
-			if err := proc.Signal(syscall.SIGTERM); err == nil {
-				log.Printf("已终止任务 %d 的进程 (PID: %d)", id, task.PID)
-			}
-		}
+	if task.Status == model.TaskStatusDownloading {
+		terminateTaskProcess(task)
 	}
 
 	// 删除日志文件
@@ -158,6 +168,72 @@ func DeleteTask(id uint) error {
 	}
 
 	return model.GetDB().Delete(&task).Error
+}
+
+// CancelTask 取消正在进行的任务。
+// 保留任务记录与全部参数、标记为「已中断」，以便用户随后重试。
+func CancelTask(id uint) (*model.Task, error) {
+	task, err := GetTaskByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if task.Status != model.TaskStatusDownloading && task.Status != model.TaskStatusPending {
+		return nil, fmt.Errorf("任务未在进行中，无法取消")
+	}
+
+	terminateTaskProcess(task)
+
+	now := time.Now()
+	task.Status = model.TaskStatusInterrupted
+	task.ErrorMsg = "任务已被手动取消"
+	task.FinishedAt = &now
+	task.PID = 0
+	if err := model.GetDB().Save(task).Error; err != nil {
+		return nil, err
+	}
+
+	return task, nil
+}
+
+// RetryTask 重试失败/已中断/已完成的任务：重置运行态字段并置回 pending，
+// 之后由 StartTaskPolling 统一调度启动（无需在此重复启动逻辑）。
+func RetryTask(id uint) (*model.Task, error) {
+	task, err := GetTaskByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if task.Status == model.TaskStatusDownloading || task.Status == model.TaskStatusPending {
+		return nil, fmt.Errorf("任务正在进行中，无需重试")
+	}
+
+	// 保留 URL 与全部配置参数，只清理上一次运行的痕迹
+	task.Status = model.TaskStatusPending
+	task.Progress = 0
+	task.Speed = ""
+	task.DownloadedSize = ""
+	task.TotalSize = ""
+	task.ErrorMsg = ""
+	task.FinishedAt = nil
+	task.PID = 0
+	if err := model.GetDB().Save(task).Error; err != nil {
+		return nil, err
+	}
+
+	return task, nil
+}
+
+// DeleteTasks 批量删除任务，返回成功与失败的 ID
+func DeleteTasks(ids []uint) (deleted []uint, failed []uint) {
+	for _, id := range ids {
+		if err := DeleteTask(id); err != nil {
+			failed = append(failed, id)
+			continue
+		}
+		deleted = append(deleted, id)
+	}
+	return deleted, failed
 }
 
 func GetActiveTasks() ([]model.Task, error) {
@@ -455,6 +531,15 @@ const logFileCheckThreshold = 30 // 30秒内有更新视为任务还在进行
 func updateTaskStatus(taskID uint) {
 	task, err := GetTaskByID(taskID)
 	if err != nil {
+		return
+	}
+
+	// 只有仍在下载中的任务才根据日志推断结果。
+	// 这样可以避免「手动取消」被后续的进程退出回调覆盖：
+	// 取消会把状态置为 interrupted，随后被杀掉的进程返回，
+	// startDownloadTask 末尾仍会调用本函数，此时应直接返回。
+	// 重试会把状态置回 pending，届时由 startDownloadTask 重新置为 downloading。
+	if task.Status != model.TaskStatusDownloading {
 		return
 	}
 

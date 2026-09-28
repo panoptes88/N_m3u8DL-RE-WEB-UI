@@ -18,6 +18,10 @@ type Config struct {
 	DownloadTimeout int    // 下载超时时间（秒），0表示不限制
 }
 
+// DefaultAdminPassword 是未通过 ADMIN_PASSWORD 指定时使用的初始密码。
+// 该值是公开文档中的默认值，登录页仅在密码仍等于它时才给出提示。
+const DefaultAdminPassword = "admin123"
+
 func Load() *Config {
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
 	if port == 0 {
@@ -31,7 +35,7 @@ func Load() *Config {
 
 	adminPassword := os.Getenv("ADMIN_PASSWORD")
 	if adminPassword == "" {
-		adminPassword = "admin123"
+		adminPassword = DefaultAdminPassword
 	}
 
 	binDir := os.Getenv("BIN_DIR")

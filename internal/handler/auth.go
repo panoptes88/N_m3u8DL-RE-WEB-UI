@@ -46,6 +46,26 @@ func Login(c *gin.Context) {
 	})
 }
 
+// LoginHint 登录页提示：告知前端「初始默认密码是否仍然有效」。
+// 公开接口。只在密码确实等于公开文档中的默认值时才给出提示文案，
+// 因此不会泄露运维通过 ADMIN_PASSWORD 自定义的密码。
+func LoginHint(c *gin.Context) {
+	isDefault := false
+	if user, err := service.GetUserByUsername("admin"); err == nil {
+		isDefault = model.CheckPassword(config.DefaultAdminPassword, user.Password)
+	}
+
+	hint := "默认用户名 admin"
+	if isDefault {
+		hint = "默认用户名 admin · 默认密码 " + config.DefaultAdminPassword
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"is_default_password": isDefault,
+		"hint":                hint,
+	})
+}
+
 func Logout(c *gin.Context) {
 	token, err := c.Cookie("auth_token")
 	if err == nil && token != "" {

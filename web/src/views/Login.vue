@@ -10,7 +10,7 @@
         <div class="brand-sub">Web UI · m3u8 下载任务管理</div>
       </div>
 
-      <a-config-provider :theme="cardTheme">
+      <a-config-provider :theme="cardTheme" :locale="zhCN">
         <div class="login-card">
           <div class="login-card-title">登录</div>
           <a-form
@@ -58,20 +58,27 @@
         </div>
       </a-config-provider>
 
-      <div class="login-hint">默认用户名 admin · 默认密码 admin123</div>
+      <div v-if="hint" class="login-hint">{{ hint }}</div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
+import zhCN from 'ant-design-vue/es/locale/zh_CN'
 import { UserOutlined, LockOutlined, CloudDownloadOutlined } from '@ant-design/icons-vue'
+import { get } from '../api'
 import { useUserStore } from '../stores/user'
 
+const route = useRoute()
 const userStore = useUserStore()
 
 const loading = ref(false)
+// 登录页提示语由后端下发：只有密码仍是初始默认值时才提示默认密码，
+// 避免用户改过密码后仍显示默认密码造成误导
+const hint = ref('')
 const formState = reactive({
   username: '',
   password: ''
@@ -97,19 +104,37 @@ const rules = {
   password: [{ required: true, message: '请输入密码' }]
 }
 
+// 只接受站内相对路径，避免 ?redirect=//evil.com 之类的开放重定向
+function safeRedirect(value) {
+  if (typeof value !== 'string') return '/'
+  if (!value.startsWith('/') || value.startsWith('//')) return '/'
+  return value
+}
+
 async function handleSubmit() {
   loading.value = true
   try {
     await userStore.login(formState.username, formState.password)
     message.success('登录成功')
+    // 登录后回到被拦截的页面（会话过期跳转时会带上 redirect）
+    const redirect = safeRedirect(route.query.redirect)
     // 使用 window.location 强制跳转，而不是 router.push
-    window.location.href = '/'
+    window.location.href = redirect
   } catch (err) {
     message.error(err.response?.data?.error || err.message || '登录失败')
   } finally {
     loading.value = false
   }
 }
+
+onMounted(async () => {
+  try {
+    const res = await get('/auth/hint')
+    hint.value = res?.hint || ''
+  } catch {
+    // 提示语属于锦上添花，失败时静默忽略
+  }
+})
 </script>
 
 <style scoped>
@@ -165,7 +190,7 @@ async function handleSubmit() {
   width: 56px;
   height: 56px;
   margin: 0 auto 14px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -185,13 +210,13 @@ async function handleSubmit() {
 .brand-sub {
   margin-top: 4px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .login-card {
   width: 100%;
   padding: 28px 26px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: 0 24px 64px rgba(2, 6, 23, 0.55);
 }
@@ -221,6 +246,6 @@ async function handleSubmit() {
 .login-hint {
   margin-top: 18px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.55);
 }
 </style>

@@ -3,13 +3,13 @@
     <PageHeader title="下载任务" subtitle="创建任务并跟踪下载进度" />
 
     <!-- 创建任务表单 -->
-    <a-card title="创建下载任务" class="app-card">
+    <a-card title="创建下载任务" class="app-card toolbar-card">
       <template #extra>
-        <a-space>
+        <div class="card-toolbar">
           <a-select
             v-model:value="selectedProfileId"
+            class="profile-select"
             placeholder="选择下载方案"
-            style="width: 200px"
             allow-clear
             :dropdown-match-select-width="false"
             @change="handleProfileChange"
@@ -22,7 +22,7 @@
             <template #icon><SettingOutlined /></template>
             管理方案
           </a-button>
-        </a-space>
+        </div>
       </template>
       <a-form
         ref="formRef"
@@ -180,12 +180,12 @@
     </a-card>
 
     <!-- 任务列表 -->
-    <a-card title="下载任务" class="app-card task-list">
+    <a-card title="下载任务" class="app-card task-list toolbar-card">
       <template #extra>
-        <a-space>
+        <div class="card-toolbar">
           <a-select
             v-model:value="taskStore.statusFilter"
-            style="width: 140px"
+            class="status-select"
             @change="taskStore.setStatusFilter"
           >
             <a-select-option value="">全部</a-select-option>
@@ -198,7 +198,7 @@
             <template #icon><ReloadOutlined /></template>
             刷新
           </a-button>
-        </a-space>
+        </div>
       </template>
 
       <!-- 批量操作条 -->
@@ -884,6 +884,57 @@ onUnmounted(() => {
 
 .task-list {
   flex: 1;
+}
+
+/* ===== 卡片头部工具条 =====
+   窄屏下 antd 的 .ant-card-head-wrapper 不换行，而工具条里的下拉是固定宽度：
+   实测 390px 溢出 6px、360px 溢出 36px（按钮超出卡片 13px）、320px 溢出 76px。
+   这里让头部允许换行，并让工具条在窄屏占满一行、下拉改为弹性宽度。 */
+.card-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-select {
+  width: 200px;
+}
+
+.status-select {
+  width: 140px;
+}
+
+@media (max-width: 576px) {
+  .toolbar-card :deep(.ant-card-head-wrapper) {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  /* 标题必须保持自然宽度：
+     antd 给 .ant-card-head-title 的是 flex:1（基宽 0），
+     若让 extra 占满整行，标题会被压缩成 0 宽而消失 */
+  .toolbar-card :deep(.ant-card-head-title) {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  /* 工具条换到第二行并占满整行 */
+  .toolbar-card :deep(.ant-card-extra) {
+    margin-inline-start: 0;
+    flex: 0 0 100%;
+  }
+
+  .card-toolbar {
+    width: 100%;
+  }
+
+  /* min-width: 0 让 flex 子项能收缩到内容宽度以下 */
+  .profile-select,
+  .status-select {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+  }
 }
 
 /* 批量操作条 */

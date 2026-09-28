@@ -462,9 +462,6 @@
         <a-descriptions-item label="跳过完整性检测">{{ currentProfile.skip_segments_check ? '是' : '否' }}</a-descriptions-item>
         <a-descriptions-item label="并行下载音视频">{{ currentProfile.concurrent_download ? '是' : '否' }}</a-descriptions-item>
         <a-descriptions-item label="解密引擎">{{ currentProfile.decryption_engine }}</a-descriptions-item>
-        <a-descriptions-item label="解密密钥">
-          <span class="secret-value">{{ currentProfile.key || '-' }}</span>
-        </a-descriptions-item>
         <a-descriptions-item label="自定义参数">{{ currentProfile.custom_args || '-' }}</a-descriptions-item>
         <a-descriptions-item label="自定义代理">{{ currentProfile.custom_proxy || '-' }}</a-descriptions-item>
         <a-descriptions-item label="创建时间">{{ formatDate(currentProfile.created_at) }}</a-descriptions-item>
@@ -767,15 +764,19 @@ async function batchDelete() {
 }
 
 // 保存任务为方案
-// 后端按域名去重：同域名会更新已有方案而不是新建，因此提示要区分「新建」和「更新」
+// 后端按「方案内容」判断重复（不比较名称）：
+//   exists  → 已有内容一致的方案，不重复添加
+//   renamed → 内容不同但名称被占用，已自动加序号
 async function saveAsProfile(task) {
-  const existedIds = new Set(profileStore.profiles.map(p => p.id))
   try {
-    const profile = await profileStore.saveTaskAsProfile(task.id)
-    if (existedIds.has(profile.id)) {
-      message.success(`已更新同域名的方案「${profile.name}」`)
+    const res = await profileStore.saveTaskAsProfile(task.id)
+    const name = res?.profile?.name
+    if (res?.action === 'exists') {
+      message.info(`该方案已存在：「${name}」，未重复添加`)
+    } else if (res?.action === 'renamed') {
+      message.success(`名称「${res.requested_name}」已存在，已保存为「${name}」`)
     } else {
-      message.success(`方案已保存为「${profile.name}」`)
+      message.success(`方案已保存为「${name}」`)
     }
   } catch (err) {
     message.error(err.response?.data?.error || '方案保存失败')
@@ -813,9 +814,8 @@ function handleProfileChange(profileId) {
     formState.autoSelect = profile.auto_select
     formState.skipSegmentsCheck = profile.skip_segments_check || false
     formState.concurrentDownload = profile.concurrent_download || false
-    // 此前漏了 key：保存方案时后端没存、加载时前端也没恢复，
-    // 导致加密流的方案加载后仍然缺少解密密钥
-    formState.key = profile.key || ''
+    // 解密密钥不随方案保存：每个视频的密钥各不相同，
+    // 若从方案恢复会把别的视频的密钥注入当前表单
     formState.decryptionEngine = profile.decryption_engine
     formState.customArgs = profile.custom_args || ''
     formState.customProxy = profile.custom_proxy || ''
@@ -1022,11 +1022,6 @@ onUnmounted(() => {
   margin-top: 4px;
 }
 
-.secret-value {
-  word-break: break-all;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 12px;
-}
 
 .rename-hint {
   margin-top: 10px;

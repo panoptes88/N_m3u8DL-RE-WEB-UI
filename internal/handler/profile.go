@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
+	"time"
 
 	"N_m3u8DL-RE-WEB-UI/internal/model"
 	"N_m3u8DL-RE-WEB-UI/internal/service"
@@ -276,48 +279,16 @@ func SaveTaskAsProfile(c *gin.Context) {
 	}
 
 	// 默认名称只取可注册主域名（hls.ted.com -> ted.com），避免把子域名也当名称
-	name := service.RegistrableDomain(domain)
-	if name == "" {
-		name = "未命名方案"
+	baseName := service.RegistrableDomain(domain)
+	if baseName == "" {
+		baseName = "未命名方案"
 	}
 
-	// 同域名已存在方案时更新它，避免反复「保存方案」累积重复条目。
-	// 注意匹配依据是域名而不是名称：即使用户把方案重命名过，
-	// 同一域名再保存仍然会命中它，并且其自定义名称会被保留。
-	if domain != "" {
-		var existing model.DownloadProfile
-		if err := model.GetDB().Where("domain = ?", domain).
-			Order("updated_at DESC").First(&existing).Error; err == nil {
-			existing.ThreadCount = task.ThreadCount
-			existing.RetryCount = task.RetryCount
-			existing.Headers = task.Headers
-			existing.BaseURL = task.BaseURL
-			existing.DelAfterDone = task.DelAfterDone
-			existing.BinaryMerge = task.BinaryMerge
-			existing.AutoSelect = task.AutoSelect
-			existing.SkipSegmentsCheck = task.SkipSegmentsCheck
-			existing.ConcurrentDownload = task.ConcurrentDownload
-			existing.Key = task.Key
-			existing.DecryptionEngine = task.DecryptionEngine
-			existing.CustomArgs = task.CustomArgs
-			existing.CustomProxy = task.CustomProxy
-
-			// 名称仍等于域名说明没被手动改过，顺手规范化为主域名；已重命名的保持不动
-			if existing.Name == existing.Domain {
-				existing.Name = name
-			}
-
-			if err := model.GetDB().Save(&existing).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "更新方案失败: " + err.Error()})
-				return
-			}
-			c.JSON(http.StatusOK, existing)
-			return
-		}
-	}
-
-	profile := &model.DownloadProfile{
-		Name:               name,
+	// 待保存的方案内容：域名 + 全部下载配置。
+	// 有意不含名称（按需求不比较名称）、也不含解密密钥
+	// —— 密钥逐视频不同，存进方案只会在加载时注入错误的密钥。
+	// 域名必须计入内容，否则不同站点但配置相同会被误判成「已存在」。
+	target := &model.DownloadProfile{
 		Domain:             domain,
 		ThreadCount:        task.ThreadCount,
 		RetryCount:         task.RetryCount,
@@ -328,17 +299,88 @@ func SaveTaskAsProfile(c *gin.Context) {
 		AutoSelect:         task.AutoSelect,
 		SkipSegmentsCheck:  task.SkipSegmentsCheck,
 		ConcurrentDownload: task.ConcurrentDownload,
-		// 此前漏了 Key，导致保存的方案不带解密密钥、加载后无法真正复现配置
-		Key:              task.Key,
-		DecryptionEngine: task.DecryptionEngine,
-		CustomArgs:       task.CustomArgs,
-		CustomProxy:      task.CustomProxy,
+		DecryptionEngine:   task.DecryptionEngine,
+		CustomArgs:         task.CustomArgs,
+		CustomProxy:        task.CustomProxy,
 	}
 
-	if err := model.GetDB().Create(profile).Error; err != nil {
+	var existing []model.DownloadProfile
+	if err := model.GetDB().Find(&existing).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询方案失败: " + err.Error()})
+		return
+	}
+
+	// 1) 已存在内容完全一致的方案 → 视为重复，不新增
+	targetKey := profileContentKey(target)
+	for i := range existing {
+		if profileContentKey(&existing[i]) == targetKey {
+			c.JSON(http.StatusOK, gin.H{
+				"profile": existing[i],
+				"action":  "exists",
+			})
+			return
+		}
+	}
+
+	// 2) 内容不一致但名称已被占用 → 自动往后加序号：ted.com -> ted.com2 -> ted.com3
+	taken := make(map[string]bool, len(existing))
+	for i := range existing {
+		taken[existing[i].Name] = true
+	}
+	finalName := uniqueProfileName(taken, baseName)
+
+	target.Name = finalName
+	if err := model.GetDB().Create(target).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存方案失败: " + err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, profile)
+	action := "created"
+	if finalName != baseName {
+		action = "renamed"
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"profile":        target,
+		"action":         action,
+		"requested_name": baseName,
+	})
+}
+
+// profileContentKey 生成用于判断「方案内容是否相同」的指纹。
+// 包含域名与全部影响下载行为的配置；
+// 有意排除 Name（按需求不比较名称）与 Key（解密密钥逐视频不同，不随方案保存）。
+func profileContentKey(p *model.DownloadProfile) string {
+	return strings.Join([]string{
+		p.Domain,
+		strconv.Itoa(p.ThreadCount),
+		strconv.Itoa(p.RetryCount),
+		p.Headers,
+		p.BaseURL,
+		strconv.FormatBool(p.DelAfterDone),
+		strconv.FormatBool(p.BinaryMerge),
+		strconv.FormatBool(p.AutoSelect),
+		strconv.FormatBool(p.SkipSegmentsCheck),
+		strconv.FormatBool(p.ConcurrentDownload),
+		p.DecryptionEngine,
+		p.CustomArgs,
+		p.CustomProxy,
+		// \x1f（单元分隔符）不会出现在这些字段里，避免拼接歧义
+	}, "\x1f")
+}
+
+// uniqueProfileName 在名称已被占用时依次尝试 name2、name3……
+func uniqueProfileName(taken map[string]bool, base string) string {
+	if base == "" {
+		base = "未命名方案"
+	}
+	if !taken[base] {
+		return base
+	}
+	for i := 2; i <= 999; i++ {
+		candidate := fmt.Sprintf("%s%d", base, i)
+		if !taken[candidate] {
+			return candidate
+		}
+	}
+	return fmt.Sprintf("%s_%d", base, time.Now().Unix())
 }

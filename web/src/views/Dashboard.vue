@@ -128,7 +128,7 @@
               @log="viewLog"
               @cancel="handleCancel"
               @retry="handleRetry"
-              @delete="deleteTask(record.id)"
+              @delete="confirmDelete"
             />
           </template>
         </template>
@@ -149,7 +149,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import {
   ClockCircleOutlined,
   CloudDownloadOutlined,
@@ -274,6 +274,18 @@ async function deleteTask(id) {
   } catch {
     message.error('删除失败')
   }
+}
+
+// 删除不可恢复，二次确认（入口在下拉菜单里）
+function confirmDelete(task) {
+  Modal.confirm({
+    title: '确定删除此任务？',
+    content: `「${task.output_name || task.url}」将被删除，此操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: () => deleteTask(task.id)
+  })
 }
 
 async function handleCancel(task) {

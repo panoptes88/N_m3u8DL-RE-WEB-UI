@@ -60,7 +60,7 @@ import {
 } from '@ant-design/icons-vue'
 import { canCancel, canRetry } from '../utils/task'
 
-defineProps({
+const props = defineProps({
   task: {
     type: Object,
     required: true
@@ -73,9 +73,12 @@ defineProps({
 
 const emit = defineEmits(['log', 'cancel', 'retry', 'save-profile', 'delete'])
 
+// 下拉菜单项必须把 task 一起抛出：父组件的 saveAsProfile(task) 依赖它。
+// 之前这里漏传，导致 task 为 undefined、读 task.id 抛错，
+// 前端只表现为「方案保存失败」（后端其实从未被调用）。
 function handleMenuClick({ key }) {
-  if (key === 'save-profile') emit('save-profile')
-  else if (key === 'delete') emit('delete')
+  if (key === 'save-profile') emit('save-profile', props.task)
+  else if (key === 'delete') emit('delete', props.task)
 }
 </script>
 

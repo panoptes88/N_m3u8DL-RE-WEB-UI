@@ -265,7 +265,7 @@
               @cancel="handleCancel"
               @retry="handleRetry"
               @save-profile="saveAsProfile"
-              @delete="handleDelete(record.id)"
+              @delete="confirmDelete"
             />
           </div>
         </div>
@@ -328,7 +328,7 @@
               @cancel="handleCancel"
               @retry="handleRetry"
               @save-profile="saveAsProfile"
-              @delete="handleDelete(record.id)"
+              @delete="confirmDelete"
             />
           </template>
         </template>
@@ -429,7 +429,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import {
   ReloadOutlined,
   SettingOutlined,
@@ -633,6 +633,19 @@ async function handleDelete(id) {
   } catch {
     message.error('删除失败')
   }
+}
+
+// 删除是不可逆操作（会终止进程并删除日志），必须二次确认。
+// 入口在下拉菜单里，用 Modal.confirm 比 popconfirm 更合适。
+function confirmDelete(task) {
+  Modal.confirm({
+    title: '确定删除此任务？',
+    content: `「${task.output_name || task.url}」将被删除，此操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: () => handleDelete(task.id)
+  })
 }
 
 // 取消正在进行的任务（记录保留，可再次重试）

@@ -11,6 +11,7 @@
             placeholder="选择下载方案"
             style="width: 200px"
             allow-clear
+            :dropdown-match-select-width="false"
             @change="handleProfileChange"
           >
             <a-select-option v-for="profile in profileStore.profiles" :key="profile.id" :value="profile.id">
@@ -354,47 +355,80 @@
       v-model:open="showProfileManager"
       title="下载方案管理"
       :footer="null"
-      width="800px"
+      :width="isMobile ? '94vw' : 760"
     >
+      <!-- 窄屏：表格会有很长的横向滚动，改用卡片列表 -->
+      <div v-if="isMobile" class="profile-cards">
+        <a-empty v-if="profileStore.profiles.length === 0" description="还没有保存过方案" />
+        <div v-for="record in profileStore.profiles" :key="record.id" class="profile-card">
+          <ProfileCell
+            class="profile-card-body"
+            :name="record.name"
+            :domain="record.domain"
+            @copy="copyToClipboard"
+          />
+          <div class="profile-card-foot">
+            <span class="profile-card-meta">#{{ record.id }} · {{ formatDate(record.created_at) }}</span>
+            <ProfileActions
+              :profile="record"
+              @load="loadProfileToForm"
+              @detail="viewProfileDetail"
+              @rename="startRename"
+              @delete="confirmDeleteProfile"
+            />
+          </div>
+        </div>
+      </div>
+
       <a-table
+        v-else
         :columns="profileColumns"
         :data-source="profileStore.profiles"
         :pagination="{ pageSize: 10 }"
         :loading="profileStore.loading"
-        :scroll="{ x: 600 }"
+        :row-key="record => record.id"
+        :scroll="{ x: 586 }"
+        table-layout="fixed"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
-            <div v-if="editingProfileId === record.id">
-              <a-input
-                v-model:value="editingProfileName"
-                size="small"
-                @blur="saveProfileName(record)"
-                @pressEnter="$event.target.blur()"
-                autofocus
-              />
-            </div>
-            <div v-else @dblclick="startEditProfileName(record)" style="cursor: pointer">
-              {{ record.name }}
-            </div>
+            <ProfileCell
+              :name="record.name"
+              :domain="record.domain"
+              @copy="copyToClipboard"
+            />
           </template>
           <template v-if="column.key === 'created_at'">
             {{ formatDate(record.created_at) }}
           </template>
           <template v-if="column.key === 'action'">
-            <a-space :size="4">
-              <a-button size="small" type="text" @click="loadProfileToForm(record)">加载</a-button>
-              <a-button size="small" type="text" @click="viewProfileDetail(record)">详情</a-button>
-              <a-popconfirm
-                title="确定删除此方案？"
-                @confirm="handleDeleteProfile(record.id)"
-              >
-                <a-button size="small" type="text" danger>删除</a-button>
-              </a-popconfirm>
-            </a-space>
+            <ProfileActions
+              :profile="record"
+              @load="loadProfileToForm"
+              @detail="viewProfileDetail"
+              @rename="startRename"
+              @delete="confirmDeleteProfile"
+            />
           </template>
         </template>
       </a-table>
+    </a-modal>
+
+    <!-- 方案重命名弹窗 -->
+    <a-modal
+      v-model:open="showProfileRename"
+      title="重命名方案"
+      :confirm-loading="renaming"
+      @ok="handleRenameOk"
+    >
+      <a-input
+        v-model:value="renameValue"
+        placeholder="请输入新的方案名称"
+        @pressEnter="handleRenameOk"
+      />
+      <div class="rename-hint">
+        原名称：{{ renameTarget?.name }}
+      </div>
     </a-modal>
 
     <!-- 方案详情弹窗 -->
@@ -443,6 +477,8 @@ import { formatDuration, progressMeta, isErrorStatus } from '../utils/task'
 import { copyToClipboard } from '../utils/clipboard'
 import { useIsMobile } from '../composables/useIsMobile'
 import PageHeader from '../components/PageHeader.vue'
+import ProfileActions from '../components/ProfileActions.vue'
+import ProfileCell from '../components/ProfileCell.vue'
 import StatusTag from '../components/StatusTag.vue'
 import TaskActions from '../components/TaskActions.vue'
 import TaskCell from '../components/TaskCell.vue'
@@ -465,9 +501,11 @@ const selectedProfileId = ref(null)
 const showProfileManager = ref(false)
 const showProfileDetail = ref(false)
 const currentProfile = ref(null)
-const editingProfileId = ref(null)
-const editingProfileName = ref('')
 const selectedRowKeys = ref([])
+const showProfileRename = ref(false)
+const renameTarget = ref(null)
+const renameValue = ref('')
+const renaming = ref(false)
 
 // 窄屏改用卡片列表（表格横向滚动在手机上不可用）
 const { isMobile } = useIsMobile()
@@ -522,11 +560,13 @@ const columns = [
 ]
 
 const profileColumns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 50 },
-  { title: '方案名称', dataIndex: 'name', key: 'name', width: 150 },
-  { title: '域名', dataIndex: 'domain', key: 'domain', width: 150 },
-  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 100 },
-  { title: '操作', key: 'action', width: 150 }
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 56 },
+  // 方案名称与域名合并为一列：域名仅在两者不同时才作为副行显示。
+  // 不再使用 antd 的 ellipsis —— 它会让单元格 nowrap，破坏这里的双行结构；
+  // 截断由 ProfileCell 内部处理，配合表格的 table-layout: fixed 生效。
+  { title: '方案', dataIndex: 'name', key: 'name', width: 250 },
+  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 110, ellipsis: true },
+  { title: '操作', key: 'action', width: 170, fixed: 'right' }
 ]
 
 function formatTime(time) {
@@ -542,27 +582,46 @@ function viewProfileDetail(profile) {
   showProfileDetail.value = true
 }
 
-function startEditProfileName(profile) {
-  editingProfileId.value = profile.id
-  editingProfileName.value = profile.name
+// 重命名改用弹窗：原来的「双击内联编辑」没有任何提示，且移动端卡片里无法使用
+function startRename(profile) {
+  renameTarget.value = profile
+  renameValue.value = profile.name
+  showProfileRename.value = true
 }
 
-async function saveProfileName(profile) {
-  if (!editingProfileName.value.trim()) {
-    message.error('方案名称不能为空')
-    editingProfileId.value = null
+async function handleRenameOk() {
+  const name = renameValue.value.trim()
+  if (!name) {
+    message.warning('方案名称不能为空')
+    return
+  }
+  if (!renameTarget.value || name === renameTarget.value.name) {
+    showProfileRename.value = false
     return
   }
 
-  if (editingProfileName.value !== profile.name) {
-    try {
-      await profileStore.updateProfile(profile.id, { name: editingProfileName.value })
-      message.success('方案名称已更新')
-    } catch {
-      message.error('更新失败')
-    }
+  renaming.value = true
+  try {
+    await profileStore.updateProfile(renameTarget.value.id, { name })
+    message.success('方案名称已更新')
+    showProfileRename.value = false
+  } catch (err) {
+    message.error(err.response?.data?.error || '重命名失败')
+  } finally {
+    renaming.value = false
   }
-  editingProfileId.value = null
+}
+
+// 删除方案同样需要二次确认（入口在下拉菜单里）
+function confirmDeleteProfile(profile) {
+  Modal.confirm({
+    title: '确定删除此方案？',
+    content: `「${profile.name}」将被删除，此操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: () => handleDeleteProfile(profile.id)
+  })
 }
 
 function resetForm() {
@@ -890,6 +949,47 @@ onUnmounted(() => {
 .task-card.row-interrupted {
   background: rgba(249, 115, 22, 0.06);
   border-color: rgba(249, 115, 22, 0.28);
+}
+
+/* ===== 方案管理：移动端卡片 ===== */
+.profile-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.profile-card-body {
+  margin-bottom: 10px;
+}
+
+.profile-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.profile-card-meta {
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.rename-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-2);
+  word-break: break-all;
 }
 
 /* 高级设置折叠面板：去掉边框，让视觉更轻 */

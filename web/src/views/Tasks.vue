@@ -278,7 +278,8 @@
         :data-source="taskStore.tasks"
         :pagination="{ pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }"
         :loading="taskStore.loading"
-        :scroll="{ x: 886 }"
+        :scroll="{ x: 916 }"
+        table-layout="fixed"
         :row-class-name="rowClassName"
         :row-selection="rowSelection"
         :row-key="record => record.id"
@@ -569,9 +570,10 @@ const formRules = {
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 56 },
-  { title: '任务', key: 'task', width: 240 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 115 },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 215 },
+  // 与首页保持同一套列宽
+  { title: '任务', key: 'task', width: 260 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 220 },
   { title: '耗时', key: 'duration', width: 100, responsive: ['lg'] },
   // 创建时间列在 <1600px 时隐藏，否则 1280/1366 这类常见宽度会出现横向滚动
   { title: '创建时间', dataIndex: 'created_at', key: 'createdAt', width: 150, responsive: ['xxl'] },

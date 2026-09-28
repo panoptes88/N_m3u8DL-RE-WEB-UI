@@ -85,7 +85,8 @@
         :pagination="false"
         size="middle"
         :loading="taskStore.loading"
-        :scroll="{ x: 760 }"
+        :scroll="{ x: 916 }"
+        table-layout="fixed"
         :row-class-name="rowClassName"
       >
         <template #bodyCell="{ column, record }">
@@ -181,13 +182,17 @@ const logTaskStatus = computed(
 
 const progressGradient = { from: '#6366f1', to: '#8b5cf6' }
 
+// 与「下载任务」页使用同一套列宽，避免两页的「任务」列宽不一致。
+// 必须配合表格的 table-layout: fixed —— 否则超长 URL 会把「任务」列撑到上千像素，
+// 反过来把状态/进度/耗时挤到几十像素。实测 1440px 下曾出现
+// 「任务」列 1405px、进度仅 47px、表格总宽 1771px（容器约 1138px）。
 const columns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-  { title: '任务', key: 'task', width: 300 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 130 },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 200 },
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 56 },
+  { title: '任务', key: 'task', width: 260 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 220 },
   { title: '耗时', key: 'duration', width: 100, responsive: ['lg'] },
-  { title: '操作', key: 'action', width: 150 }
+  { title: '操作', key: 'action', width: 160 }
 ]
 
 const recentTasks = computed(() => taskStore.tasks.slice(0, 5))

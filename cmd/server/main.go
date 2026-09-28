@@ -33,6 +33,9 @@ func main() {
 	// 初始化默认管理员用户
 	service.InitAdminUser(cfg.AdminPassword)
 
+	// 规范化历史方案名称（完整域名 -> 主域名），只影响自动生成的名称，可重复执行
+	service.MigrateProfileNames()
+
 	// 启动下载任务轮询
 	go service.StartTaskPolling(cfg)
 

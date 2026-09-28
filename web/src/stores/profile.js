@@ -46,9 +46,16 @@ export const useProfileStore = defineStore('profile', () => {
   }
 
   // 将任务保存为方案
+  // 后端对同域名会更新已有方案（而不是新建），因此这里按 id 判断：
+  // 已存在就替换、否则才插入，避免本地列表出现重复条目
   async function saveTaskAsProfile(taskId) {
     const profile = await post(`/tasks/${taskId}/save-as-profile`)
-    profiles.value.unshift(profile)
+    const index = profiles.value.findIndex(p => p.id === profile.id)
+    if (index !== -1) {
+      profiles.value[index] = profile
+    } else {
+      profiles.value.unshift(profile)
+    }
     return profile
   }
 

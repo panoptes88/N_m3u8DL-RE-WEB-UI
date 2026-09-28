@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"N_m3u8DL-RE-WEB-UI/internal/model"
+	"N_m3u8DL-RE-WEB-UI/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -274,10 +275,45 @@ func SaveTaskAsProfile(c *gin.Context) {
 		}
 	}
 
-	// 生成方案名称
-	name := domain
+	// 默认名称只取可注册主域名（hls.ted.com -> ted.com），避免把子域名也当名称
+	name := service.RegistrableDomain(domain)
 	if name == "" {
 		name = "未命名方案"
+	}
+
+	// 同域名已存在方案时更新它，避免反复「保存方案」累积重复条目。
+	// 注意匹配依据是域名而不是名称：即使用户把方案重命名过，
+	// 同一域名再保存仍然会命中它，并且其自定义名称会被保留。
+	if domain != "" {
+		var existing model.DownloadProfile
+		if err := model.GetDB().Where("domain = ?", domain).
+			Order("updated_at DESC").First(&existing).Error; err == nil {
+			existing.ThreadCount = task.ThreadCount
+			existing.RetryCount = task.RetryCount
+			existing.Headers = task.Headers
+			existing.BaseURL = task.BaseURL
+			existing.DelAfterDone = task.DelAfterDone
+			existing.BinaryMerge = task.BinaryMerge
+			existing.AutoSelect = task.AutoSelect
+			existing.SkipSegmentsCheck = task.SkipSegmentsCheck
+			existing.ConcurrentDownload = task.ConcurrentDownload
+			existing.Key = task.Key
+			existing.DecryptionEngine = task.DecryptionEngine
+			existing.CustomArgs = task.CustomArgs
+			existing.CustomProxy = task.CustomProxy
+
+			// 名称仍等于域名说明没被手动改过，顺手规范化为主域名；已重命名的保持不动
+			if existing.Name == existing.Domain {
+				existing.Name = name
+			}
+
+			if err := model.GetDB().Save(&existing).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "更新方案失败: " + err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, existing)
+			return
+		}
 	}
 
 	profile := &model.DownloadProfile{
@@ -292,9 +328,11 @@ func SaveTaskAsProfile(c *gin.Context) {
 		AutoSelect:         task.AutoSelect,
 		SkipSegmentsCheck:  task.SkipSegmentsCheck,
 		ConcurrentDownload: task.ConcurrentDownload,
-		DecryptionEngine:   task.DecryptionEngine,
-		CustomArgs:         task.CustomArgs,
-		CustomProxy:        task.CustomProxy,
+		// 此前漏了 Key，导致保存的方案不带解密密钥、加载后无法真正复现配置
+		Key:              task.Key,
+		DecryptionEngine: task.DecryptionEngine,
+		CustomArgs:       task.CustomArgs,
+		CustomProxy:      task.CustomProxy,
 	}
 
 	if err := model.GetDB().Create(profile).Error; err != nil {

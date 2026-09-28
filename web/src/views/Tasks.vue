@@ -360,7 +360,7 @@
       <!-- 窄屏：表格会有很长的横向滚动，改用卡片列表 -->
       <div v-if="isMobile" class="profile-cards">
         <a-empty v-if="profileStore.profiles.length === 0" description="还没有保存过方案" />
-        <div v-for="record in profileStore.profiles" :key="record.id" class="profile-card">
+        <div v-for="record in pagedProfiles" :key="record.id" class="profile-card">
           <ProfileCell
             class="profile-card-body"
             :name="record.name"
@@ -378,6 +378,16 @@
             />
           </div>
         </div>
+        <!-- 卡片列表同样分页，避免方案多时一路滚动到底 -->
+        <a-pagination
+          v-if="profileStore.profiles.length > profilePageSize"
+          v-model:current="profilePage"
+          :page-size="profilePageSize"
+          :total="profileStore.profiles.length"
+          size="small"
+          simple
+          class="profile-pagination"
+        />
       </div>
 
       <a-table
@@ -452,6 +462,9 @@
         <a-descriptions-item label="跳过完整性检测">{{ currentProfile.skip_segments_check ? '是' : '否' }}</a-descriptions-item>
         <a-descriptions-item label="并行下载音视频">{{ currentProfile.concurrent_download ? '是' : '否' }}</a-descriptions-item>
         <a-descriptions-item label="解密引擎">{{ currentProfile.decryption_engine }}</a-descriptions-item>
+        <a-descriptions-item label="解密密钥">
+          <span class="secret-value">{{ currentProfile.key || '-' }}</span>
+        </a-descriptions-item>
         <a-descriptions-item label="自定义参数">{{ currentProfile.custom_args || '-' }}</a-descriptions-item>
         <a-descriptions-item label="自定义代理">{{ currentProfile.custom_proxy || '-' }}</a-descriptions-item>
         <a-descriptions-item label="创建时间">{{ formatDate(currentProfile.created_at) }}</a-descriptions-item>
@@ -506,6 +519,9 @@ const showProfileRename = ref(false)
 const renameTarget = ref(null)
 const renameValue = ref('')
 const renaming = ref(false)
+// 方案卡片列表的分页（与桌面表格的每页条数保持一致）
+const profilePage = ref(1)
+const profilePageSize = 10
 
 // 窄屏改用卡片列表（表格横向滚动在手机上不可用）
 const { isMobile } = useIsMobile()
@@ -521,6 +537,12 @@ const rowSelection = computed(() => ({
     selectedRowKeys.value = keys
   }
 }))
+
+// 移动端卡片列表的当前页数据
+const pagedProfiles = computed(() => {
+  const start = (profilePage.value - 1) * profilePageSize
+  return profileStore.profiles.slice(start, start + profilePageSize)
+})
 
 const progressGradient = { from: '#6366f1', to: '#8b5cf6' }
 
@@ -745,12 +767,18 @@ async function batchDelete() {
 }
 
 // 保存任务为方案
+// 后端按域名去重：同域名会更新已有方案而不是新建，因此提示要区分「新建」和「更新」
 async function saveAsProfile(task) {
+  const existedIds = new Set(profileStore.profiles.map(p => p.id))
   try {
-    await profileStore.saveTaskAsProfile(task.id)
-    message.success('方案保存成功')
-  } catch {
-    message.error('方案保存失败')
+    const profile = await profileStore.saveTaskAsProfile(task.id)
+    if (existedIds.has(profile.id)) {
+      message.success(`已更新同域名的方案「${profile.name}」`)
+    } else {
+      message.success(`方案已保存为「${profile.name}」`)
+    }
+  } catch (err) {
+    message.error(err.response?.data?.error || '方案保存失败')
   }
 }
 
@@ -767,6 +795,7 @@ function handleProfileChange(profileId) {
     formState.autoSelect = true
     formState.skipSegmentsCheck = false
     formState.concurrentDownload = false
+    formState.key = ''
     formState.decryptionEngine = 'MP4DECRYPT'
     formState.customArgs = ''
     formState.customProxy = ''
@@ -784,6 +813,9 @@ function handleProfileChange(profileId) {
     formState.autoSelect = profile.auto_select
     formState.skipSegmentsCheck = profile.skip_segments_check || false
     formState.concurrentDownload = profile.concurrent_download || false
+    // 此前漏了 key：保存方案时后端没存、加载时前端也没恢复，
+    // 导致加密流的方案加载后仍然缺少解密密钥
+    formState.key = profile.key || ''
     formState.decryptionEngine = profile.decryption_engine
     formState.customArgs = profile.custom_args || ''
     formState.customProxy = profile.custom_proxy || ''
@@ -983,6 +1015,17 @@ onUnmounted(() => {
   font-size: 12px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
+}
+
+.profile-pagination {
+  align-self: center;
+  margin-top: 4px;
+}
+
+.secret-value {
+  word-break: break-all;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
 }
 
 .rename-hint {
